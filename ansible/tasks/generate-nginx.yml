@@ -46,7 +46,20 @@
     all_domains: "{{ (app_domains + extra_only_domains) | unique }}"
 
 # =========================
-# HTTP CONFIGS (SAFE)
+# ACME WEBROOT (CRITICAL)
+# =========================
+
+- name: Ensure ACME challenge directories exist
+  file:
+    path: /var/www/letsencrypt/.well-known/acme-challenge
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: "0755"
+    recurse: yes
+
+# =========================
+# HTTP CONFIGS
 # =========================
 
 - name: Generate HTTP configs for apps
@@ -89,16 +102,8 @@
     state: reloaded
 
 # =========================
-# CERTBOT (WEBROOT)
+# CERTBOT (STRICT)
 # =========================
-
-- name: Ensure letsencrypt webroot exists
-  file:
-    path: /var/www/letsencrypt
-    state: directory
-    owner: www-data
-    group: www-data
-    mode: "0755"
 
 - name: Obtain certificates via webroot
   command: >
@@ -109,9 +114,10 @@
     --non-interactive
     --agree-tos
     --email admin@mchangohub.com
-  when: all_domains | length > 0
   register: certbot
-  changed_when: "'Congratulations' in certbot.stdout"
+  failed_when:
+    - certbot.rc != 0
+    - "'Congratulations' not in certbot.stdout"
 
 # =========================
 # SSL SAFETY CHECKS
@@ -134,7 +140,7 @@
       }}
 
 # =========================
-# HTTPS CONFIGS (SAFE)
+# HTTPS CONFIGS
 # =========================
 
 - name: Regenerate HTTPS configs for apps
@@ -160,9 +166,15 @@
 # CLEAN INVALID HTTPS CONFIGS
 # =========================
 
-- name: Remove HTTPS configs without certificates
+- name: Remove HTTPS configs without certificates (sites-available)
   file:
     path: "/etc/nginx/sites-available/extra-{{ item | replace('.', '-') }}.conf"
+    state: absent
+  loop: "{{ all_domains | difference(ssl_ready_domains) }}"
+
+- name: Remove dangling HTTPS symlinks (sites-enabled)
+  file:
+    path: "/etc/nginx/sites-enabled/extra-{{ item | replace('.', '-') }}.conf"
     state: absent
   loop: "{{ all_domains | difference(ssl_ready_domains) }}"
 
