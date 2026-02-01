@@ -119,6 +119,7 @@
   loop: "{{ apps }}"
   loop_control:
     loop_var: app
+    label: "{{ app.name }}"
   vars:
     ssl_enabled: true
     environments_to_use: >-
@@ -128,6 +129,17 @@
         | selectattr('value.domain', 'in', ssl_ready_domains)
         | list
       }}
+  when: environments_to_use | length > 0
+
+- name: Debug – no HTTPS-ready environments
+  debug:
+    msg: "No valid certificates found for any environment of {{ app.name }}"
+  loop: "{{ apps }}"
+  loop_control:
+    loop_var: app
+  when:
+    - app.environments is defined
+    - (app.environments | dict2items | selectattr('value.domain', 'in', ssl_ready_domains) | list) | length == 0
 
 - name: Generate HTTPS configs for extra tools
   template:
