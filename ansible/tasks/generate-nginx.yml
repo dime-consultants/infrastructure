@@ -173,13 +173,18 @@
 
 - name: Enable HTTPS sites for apps
   file:
-    src: "/etc/nginx/sites-available/{{ item.name }}-{{ env_key }}.conf"
-    dest: "/etc/nginx/sites-enabled/{{ item.name }}-{{ env_key }}.conf"
+    src: "/etc/nginx/sites-available/{{ app.name }}-{{ env_key }}.conf"
+    dest: "/etc/nginx/sites-enabled/{{ app.name }}-{{ env_key }}.conf"
     state: link
-  loop: "{{ apps | map('extract', 'environments') | list | flatten(levels=1) }}"
+  loop: "{{ apps | subelements('environments') }}"
   loop_control:
-    loop_var: env_key
-  when: env_key.domain in ssl_ready_domains
+    loop_var: item
+  vars:
+    app: "{{ item.0 }}"
+    env_key: "{{ item.1.0 }}"
+    env_val: "{{ item.1.1 }}"
+  when: env_val.domain in ssl_ready_domains
+
 
 # =========================
 # CLEAN INVALID HTTPS CONFIGS
