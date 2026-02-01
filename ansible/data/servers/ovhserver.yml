@@ -17,17 +17,17 @@ apps:
     repo: rentwave/mvpm
     environments:
       prod:
-        domain: app.rentwave.africa
+        domain: app.rentwaveafrica.co.ke
         port: 8001
       stage:
-        domain: stage-app.rentwave.africa
+        domain: stage-app.rentwaveafrica.co.ke
         port: 8002
 
   - name: rentwave-ui
     repo: rentwave/mvpm-ui
     environments:
       prod:
-        domain: rentwave.africa
+        domain: rentwaveafrica.co.ke
         port: 3000
 
 extra_domains:
