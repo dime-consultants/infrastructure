@@ -1,4 +1,8 @@
 ---
+# =========================
+# CLEAN DEFAULT NGINX
+# =========================
+
 - name: Remove default Nginx site symlink
   file:
     path: /etc/nginx/sites-enabled/default
@@ -8,6 +12,10 @@
   file:
     path: /etc/nginx/sites-available/default
     state: absent
+
+# =========================
+# DOMAIN COLLECTION
+# =========================
 
 - name: Gather all app domains
   set_fact:
@@ -23,7 +31,7 @@
         | list
       }}
 
-- name: Gather all extra domains
+- name: Gather extra-only domains
   set_fact:
     extra_only_domains: >-
       {{
@@ -37,9 +45,9 @@
   set_fact:
     all_domains: "{{ (app_domains + extra_only_domains) | unique }}"
 
-# -------------------------
-# HTTP CONFIGS ONLY
-# -------------------------
+# =========================
+# HTTP CONFIGS (SAFE)
+# =========================
 
 - name: Generate HTTP configs for apps
   include_tasks: generate-nginx-app.yml
@@ -53,16 +61,23 @@
   template:
     src: ../templates/nginx-extra-http.j2
     dest: "/etc/nginx/sites-available/extra-{{ item.domain | replace('.', '-') }}.conf"
-    mode: '0644'
+    mode: "0644"
   loop: "{{ extra_domains }}"
   when: item.domain in extra_only_domains
 
-- name: Enable HTTP sites
+- name: Enable all HTTP sites
   file:
     src: "/etc/nginx/sites-available/{{ item }}"
     dest: "/etc/nginx/sites-enabled/{{ item }}"
     state: link
-  loop: "{{ lookup('ansible.builtin.fileglob', '/etc/nginx/sites-available/*.conf', wantlist=True) | map('basename') | list }}"
+  loop: >-
+    {{
+      lookup('ansible.builtin.fileglob',
+             '/etc/nginx/sites-available/*.conf',
+             wantlist=True)
+      | map('basename')
+      | list
+    }}
 
 - name: Test nginx HTTP config
   command: nginx -t
@@ -73,16 +88,24 @@
     name: nginx
     state: reloaded
 
-# -------------------------
-# CERTBOT
-# -------------------------
+# =========================
+# CERTBOT (WEBROOT)
+# =========================
+
+- name: Ensure letsencrypt webroot exists
+  file:
+    path: /var/www/letsencrypt
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: "0755"
 
 - name: Obtain certificates via webroot
   command: >
     certbot certonly
     --webroot
     -w /var/www/letsencrypt
-    -d {{ all_domains | join(' -d ') }}
+    {% for d in all_domains %}-d {{ d }} {% endfor %}
     --non-interactive
     --agree-tos
     --email admin@mchangohub.com
@@ -90,9 +113,29 @@
   register: certbot
   changed_when: "'Congratulations' in certbot.stdout"
 
-# -------------------------
-# HTTPS CONFIGS
-# -------------------------
+# =========================
+# SSL SAFETY CHECKS
+# =========================
+
+- name: Check which domains have certificates
+  stat:
+    path: "/etc/letsencrypt/live/{{ item }}/fullchain.pem"
+  loop: "{{ all_domains }}"
+  register: cert_stats
+
+- name: Build list of SSL-ready domains
+  set_fact:
+    ssl_ready_domains: >-
+      {{
+        cert_stats.results
+        | selectattr('stat.exists', 'equalto', true)
+        | map(attribute='item')
+        | list
+      }}
+
+# =========================
+# HTTPS CONFIGS (SAFE)
+# =========================
 
 - name: Regenerate HTTPS configs for apps
   include_tasks: generate-nginx-app.yml
@@ -101,14 +144,31 @@
     loop_var: app
   vars:
     ssl_enabled: true
+  when: app.environments.prod.domain in ssl_ready_domains
 
 - name: Generate HTTPS configs for extra tools
   template:
     src: ../templates/nginx-extra-https.j2
     dest: "/etc/nginx/sites-available/extra-{{ item.domain | replace('.', '-') }}.conf"
-    mode: '0644'
+    mode: "0644"
   loop: "{{ extra_domains }}"
-  when: item.domain in extra_only_domains
+  when:
+    - item.domain in extra_only_domains
+    - item.domain in ssl_ready_domains
+
+# =========================
+# CLEAN INVALID HTTPS CONFIGS
+# =========================
+
+- name: Remove HTTPS configs without certificates
+  file:
+    path: "/etc/nginx/sites-available/extra-{{ item | replace('.', '-') }}.conf"
+    state: absent
+  loop: "{{ all_domains | difference(ssl_ready_domains) }}"
+
+# =========================
+# FINAL VALIDATION
+# =========================
 
 - name: Test nginx HTTPS config
   command: nginx -t
