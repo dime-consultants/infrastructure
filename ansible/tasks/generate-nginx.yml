@@ -158,8 +158,28 @@
     dest: "/etc/nginx/sites-available/extra-{{ item.domain | replace('.', '-') }}.conf"
     mode: "0644"
   loop: "{{ extra_domains }}"
-  when:
-    - item.domain in ssl_ready_domains
+  when: item.domain in ssl_ready_domains
+
+# -------------------------
+# ENABLE HTTPS SITES
+# -------------------------
+
+- name: Enable HTTPS sites for extra tools
+  file:
+    src: "/etc/nginx/sites-available/extra-{{ item.domain | replace('.', '-') }}.conf"
+    dest: "/etc/nginx/sites-enabled/extra-{{ item.domain | replace('.', '-') }}.conf"
+    state: link
+  loop: "{{ extra_domains | selectattr('domain', 'in', ssl_ready_domains) | list }}"
+
+- name: Enable HTTPS sites for apps
+  file:
+    src: "/etc/nginx/sites-available/{{ item.name }}-{{ env_key }}.conf"
+    dest: "/etc/nginx/sites-enabled/{{ item.name }}-{{ env_key }}.conf"
+    state: link
+  loop: "{{ apps | map('extract', 'environments') | list | flatten(levels=1) }}"
+  loop_control:
+    loop_var: env_key
+  when: env_key.domain in ssl_ready_domains
 
 # =========================
 # CLEAN INVALID HTTPS CONFIGS
