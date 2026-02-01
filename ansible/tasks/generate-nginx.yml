@@ -76,7 +76,6 @@
     dest: "/etc/nginx/sites-available/extra-{{ item.domain | replace('.', '-') }}.conf"
     mode: "0644"
   loop: "{{ extra_domains }}"
-  when: item.domain in extra_only_domains
 
 - name: Enable all HTTP sites
   file:
@@ -105,11 +104,10 @@
 # CERTBOT (STRICT)
 # =========================
 
-- name: Obtain certificates via webroot
+- name: Obtain certificates via webroot for all domains
   command: >
     certbot certonly
-    --webroot
-    -w /var/www/letsencrypt
+    --webroot -w /var/www/letsencrypt
     {% for d in all_domains %}-d {{ d }} {% endfor %}
     --non-interactive
     --agree-tos
@@ -160,9 +158,9 @@
   loop: "{{ extra_domains }}"
   when: item.domain in ssl_ready_domains
 
-# -------------------------
+# =========================
 # ENABLE HTTPS SITES
-# -------------------------
+# =========================
 
 - name: Enable HTTPS sites for extra tools
   file:
@@ -173,18 +171,21 @@
 
 - name: Enable HTTPS sites for apps
   file:
-    src: "/etc/nginx/sites-available/{{ app.name }}-{{ env_key }}.conf"
-    dest: "/etc/nginx/sites-enabled/{{ app.name }}-{{ env_key }}.conf"
+    src: "/etc/nginx/sites-available/{{ app.name }}-{{ env.key }}.conf"
+    dest: "/etc/nginx/sites-enabled/{{ app.name }}-{{ env.key }}.conf"
     state: link
-  loop: "{{ apps | subelements('environments') }}"
+  loop: >-
+    {{
+      apps
+      | map('extract', 'environments')
+      | map('dict2items')
+      | flatten(levels=1)
+    }}
   loop_control:
-    loop_var: item
+    loop_var: env
   vars:
-    app: "{{ item.0 }}"
-    env_key: "{{ item.1.0 }}"
-    env_val: "{{ item.1.1 }}"
-  when: env_val.domain in ssl_ready_domains
-
+    app: "{{ apps | selectattr('environments.' + env.key + '.domain', 'in', ssl_ready_domains) | first }}"
+  when: app is defined
 
 # =========================
 # CLEAN INVALID HTTPS CONFIGS
