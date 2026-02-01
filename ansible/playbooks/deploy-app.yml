@@ -35,6 +35,7 @@
     - name: Deploy with Docker Compose (pull + always recreate)
       community.docker.docker_compose_v2:
         project_src: "{{ app_dir }}"
+        project_name: "{{ app_name }}_{{ env | default('prod') }}"
         files:
           - docker-compose.yml
         env_files:
