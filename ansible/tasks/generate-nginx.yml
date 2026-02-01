@@ -89,7 +89,7 @@
     name: nginx
     state: reloaded
 
-- name: Obtain certificates via webroot (one per domain)
+- name: Obtain certificates via webroot
   command: >
     certbot certonly
     --webroot -w /var/www/letsencrypt
@@ -97,6 +97,7 @@
     --non-interactive --agree-tos --email admin@mchangohub.com
   loop: "{{ all_domains }}"
   register: certbot
+  ignore_errors: yes
 
 - name: Check which domains have certificates
   stat:
