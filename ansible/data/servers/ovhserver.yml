@@ -10,7 +10,7 @@ apps:
     repo: SteveNdegwa/zanaka
     environments:
       prod:
-        domain: flower.mchangohub.com
+        domain: app.mchangohub.com
         port: 8000
   
 #  - name: zanaka-ui
@@ -23,13 +23,13 @@ apps:
 
 # Additional internal/admin tools exposed via subdomains
 # These are NOT full apps with their own repo/deploy — just reverse proxies
-#extra_domains:
-#   - domain: flower.mchangohub.com
-#     proxy_port: 5555
-#   - domain: portainer.mchangohub.com
-#     proxy_port: 9000
-#   - domain: grafana.mchangohub.com
-#     proxy_port: 3000
-#   - domain: rabbit.mchangohub.com
-#     proxy_port: 15672
-#     basic_auth: true
+extra_domains:
+   - domain: flower.mchangohub.com
+     proxy_port: 5555
+   - domain: portainer.mchangohub.com
+     proxy_port: 9000
+   - domain: grafana.mchangohub.com
+     proxy_port: 3000
+   - domain: rabbit.mchangohub.com
+     proxy_port: 15672
+     basic_auth: true

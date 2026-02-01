@@ -3,99 +3,118 @@
   file:
     path: /etc/nginx/sites-enabled/default
     state: absent
-  notify: Reload Nginx
 
 - name: Remove default Nginx config file
   file:
     path: /etc/nginx/sites-available/default
     state: absent
-  notify: Reload Nginx
 
-- name: Find lingering default symlinks
-  find:
-    paths: /etc/nginx/sites-enabled
-    patterns: 'default*'
-  register: default_symlinks
-
-- name: Delete lingering default symlinks
-  file:
-    path: "{{ item.path }}"
-    state: absent
-  loop: "{{ default_symlinks.files | default([]) }}"
-  notify: Reload Nginx
-
-- name: Gather all domains for SSL
+- name: Gather all app domains
   set_fact:
-    all_domains: >
+    app_domains: >-
       {{
-        (apps | default([]))
+        apps
         | map(attribute='environments')
+        | map('dict2items')
         | flatten
-        | map(attribute='domain')
+        | map(attribute='value.domain')
         | select('defined')
         | select('truthy')
         | list
-        +
-        (extra_domains | default([]))
-        | map(attribute='domain')
-        | select('defined')
-        | select('truthy')
-        | list
-        | unique
       }}
 
-- name: Generate and enable configs for each app
+- name: Gather all extra domains
+  set_fact:
+    extra_only_domains: >-
+      {{
+        extra_domains
+        | map(attribute='domain')
+        | difference(app_domains)
+        | list
+      }}
+
+- name: Combine all domains
+  set_fact:
+    all_domains: "{{ (app_domains + extra_only_domains) | unique }}"
+
+# -------------------------
+# HTTP CONFIGS ONLY
+# -------------------------
+
+- name: Generate HTTP configs for apps
   include_tasks: generate-nginx-app.yml
-  loop: "{{ apps | default([]) }}"
+  loop: "{{ apps }}"
   loop_control:
     loop_var: app
+  vars:
+    ssl_enabled: false
 
-- name: Generate configs for extra tools
+- name: Generate HTTP configs for extra tools
   template:
-    src: ../templates/nginx-extra.j2
+    src: ../templates/nginx-extra-http.j2
     dest: "/etc/nginx/sites-available/extra-{{ item.domain | replace('.', '-') }}.conf"
     mode: '0644'
-  loop: "{{ extra_domains | default([]) }}"
-  when: item.domain is defined and item.domain | length > 0
-  notify: Reload Nginx
+  loop: "{{ extra_domains }}"
+  when: item.domain in extra_only_domains
 
-- name: Enable extra tool sites
+- name: Enable HTTP sites
   file:
-    src: "/etc/nginx/sites-available/extra-{{ item.domain | replace('.', '-') }}.conf"
-    dest: "/etc/nginx/sites-enabled/extra-{{ item.domain | replace('.', '-') }}.conf"
+    src: "/etc/nginx/sites-available/{{ item }}"
+    dest: "/etc/nginx/sites-enabled/{{ item }}"
     state: link
-  loop: "{{ extra_domains | default([]) }}"
-  when: item.domain is defined and item.domain | length > 0
-  notify: Reload Nginx
+  loop: "{{ lookup('ansible.builtin.fileglob', '/etc/nginx/sites-available/*.conf', wantlist=True) | map('basename') | list }}"
 
-- name: Obtain/renew certificates
-  command: >
-    certbot --nginx
-    -d {{ all_domains | join(' -d ') }}
-    --non-interactive --agree-tos --email admin@mchangohub.com --expand --redirect
-  when: all_domains | length > 0
-  register: certbot
-  changed_when: false
-  failed_when: >
-    certbot.rc != 0 and
-    'no changes were made' not in (certbot.stderr | default('')) and
-    'certificate is already up to date' not in (certbot.stderr | default(''))
-  notify: Reload Nginx
-
-- name: Create HTTP Basic Auth file if needed
-  htpasswd:
-    path: /etc/nginx/.htpasswd
-    name: admin
-    password: "{{ lookup('env', 'NGINX_BASIC_AUTH_PASSWORD') }}"
-    crypt_scheme: bcrypt
-    state: present
-  when: >
-    extra_domains is defined and
-    extra_domains | selectattr('basic_auth', 'equalto', true) | list | length > 0
-  no_log: true
-  notify: Reload Nginx
-
-- name: Test Nginx configuration
+- name: Test nginx HTTP config
   command: nginx -t
   changed_when: false
-  notify: Reload Nginx
+
+- name: Reload nginx (HTTP)
+  service:
+    name: nginx
+    state: reloaded
+
+# -------------------------
+# CERTBOT
+# -------------------------
+
+- name: Obtain certificates via webroot
+  command: >
+    certbot certonly
+    --webroot
+    -w /var/www/letsencrypt
+    -d {{ all_domains | join(' -d ') }}
+    --non-interactive
+    --agree-tos
+    --email admin@mchangohub.com
+  when: all_domains | length > 0
+  register: certbot
+  changed_when: "'Congratulations' in certbot.stdout"
+
+# -------------------------
+# HTTPS CONFIGS
+# -------------------------
+
+- name: Regenerate HTTPS configs for apps
+  include_tasks: generate-nginx-app.yml
+  loop: "{{ apps }}"
+  loop_control:
+    loop_var: app
+  vars:
+    ssl_enabled: true
+
+- name: Generate HTTPS configs for extra tools
+  template:
+    src: ../templates/nginx-extra-https.j2
+    dest: "/etc/nginx/sites-available/extra-{{ item.domain | replace('.', '-') }}.conf"
+    mode: '0644'
+  loop: "{{ extra_domains }}"
+  when: item.domain in extra_only_domains
+
+- name: Test nginx HTTPS config
+  command: nginx -t
+  changed_when: false
+
+- name: Reload nginx (HTTPS)
+  service:
+    name: nginx
+    state: reloaded

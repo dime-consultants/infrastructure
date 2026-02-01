@@ -1,38 +1,16 @@
 ---
-- name: Create config for {{ app.name }} - prod
+- name: Create nginx config for {{ app.name }} (prod)
   template:
     src: ../templates/nginx-app.j2
     dest: "/etc/nginx/sites-available/{{ app.name }}-prod.conf"
     mode: '0644'
   vars:
-    domain: "{{ app.environments.prod.domain | default('') }}"
-    port: "{{ app.environments.prod.port | default(8000) }}"
-  when: app.environments.prod.domain is defined and app.environments.prod.domain | length > 0
-  notify: Reload Nginx
+    domain: "{{ app.environments.prod.domain }}"
+    backend_port: "{{ app.environments.prod.port }}"
+    ssl_enabled: "{{ ssl_enabled | default(false) }}"
 
 - name: Enable {{ app.name }} prod
   file:
     src: "/etc/nginx/sites-available/{{ app.name }}-prod.conf"
     dest: "/etc/nginx/sites-enabled/{{ app.name }}-prod.conf"
     state: link
-  when: app.environments.prod.domain is defined and app.environments.prod.domain | length > 0
-  notify: Reload Nginx
-
-- name: Create config for {{ app.name }} - stage
-  template:
-    src: ../templates/nginx-app.j2
-    dest: "/etc/nginx/sites-available/{{ app.name }}-stage.conf"
-    mode: '0644'
-  vars:
-    domain: "{{ app.environments.stage.domain | default('') }}"
-    port: "{{ app.environments.stage.port | default(8000) }}"
-  when: app.environments.stage.domain is defined and app.environments.stage.domain | length > 0
-  notify: Reload Nginx
-
-- name: Enable {{ app.name }} stage
-  file:
-    src: "/etc/nginx/sites-available/{{ app.name }}-stage.conf"
-    dest: "/etc/nginx/sites-enabled/{{ app.name }}-stage.conf"
-    state: link
-  when: app.environments.stage.domain is defined and app.environments.stage.domain | length > 0
-  notify: Reload Nginx
