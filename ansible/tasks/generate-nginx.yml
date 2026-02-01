@@ -104,18 +104,14 @@
 # CERTBOT (STRICT)
 # =========================
 
-- name: Obtain certificates via webroot for all domains
+- name: Obtain certificates via webroot (one per domain)
   command: >
     certbot certonly
     --webroot -w /var/www/letsencrypt
-    {% for d in all_domains %}-d {{ d }} {% endfor %}
-    --non-interactive
-    --agree-tos
-    --email admin@mchangohub.com
+    -d {{ item }}
+    --non-interactive --agree-tos --email admin@mchangohub.com
+  loop: "{{ all_domains }}"
   register: certbot
-  failed_when:
-    - certbot.rc != 0
-    - "'Congratulations' not in certbot.stdout"
 
 # =========================
 # SSL SAFETY CHECKS
