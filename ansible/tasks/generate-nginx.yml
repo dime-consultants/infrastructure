@@ -159,7 +159,6 @@
     mode: "0644"
   loop: "{{ extra_domains }}"
   when:
-    - item.domain in extra_only_domains
     - item.domain in ssl_ready_domains
 
 # =========================
