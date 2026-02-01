@@ -28,7 +28,7 @@ extra_domains:
      proxy_port: 5555
    - domain: portainer.mchangohub.com
      proxy_port: 9000
-   - domain: grafana.mchangohub.com
+   - domain: notifications.mchangohub.com
      proxy_port: 3000
    - domain: rabbit.mchangohub.com
      proxy_port: 15672
