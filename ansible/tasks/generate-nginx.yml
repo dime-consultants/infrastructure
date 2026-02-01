@@ -1,8 +1,4 @@
 ---
-# =========================
-# CLEAN DEFAULT NGINX
-# =========================
-
 - name: Remove default Nginx site symlink
   file:
     path: /etc/nginx/sites-enabled/default
@@ -12,10 +8,6 @@
   file:
     path: /etc/nginx/sites-available/default
     state: absent
-
-# =========================
-# DOMAIN COLLECTION
-# =========================
 
 - name: Gather all app domains
   set_fact:
@@ -45,10 +37,6 @@
   set_fact:
     all_domains: "{{ (app_domains + extra_only_domains) | unique }}"
 
-# =========================
-# ACME WEBROOT (CRITICAL)
-# =========================
-
 - name: Ensure ACME challenge directories exist
   file:
     path: /var/www/letsencrypt/.well-known/acme-challenge
@@ -58,10 +46,6 @@
     mode: "0755"
     recurse: yes
 
-# =========================
-# HTTP CONFIGS
-# =========================
-
 - name: Generate HTTP configs for apps
   include_tasks: generate-nginx-app.yml
   loop: "{{ apps }}"
@@ -69,6 +53,11 @@
     loop_var: app
   vars:
     ssl_enabled: false
+    environments_to_use: >-
+      {{
+        app.environments
+        | dict2items
+      }}
 
 - name: Generate HTTP configs for extra tools
   template:
@@ -100,10 +89,6 @@
     name: nginx
     state: reloaded
 
-# =========================
-# CERTBOT (STRICT)
-# =========================
-
 - name: Obtain certificates via webroot (one per domain)
   command: >
     certbot certonly
@@ -112,10 +97,6 @@
     --non-interactive --agree-tos --email admin@mchangohub.com
   loop: "{{ all_domains }}"
   register: certbot
-
-# =========================
-# SSL SAFETY CHECKS
-# =========================
 
 - name: Check which domains have certificates
   stat:
@@ -133,10 +114,6 @@
         | list
       }}
 
-# =========================
-# HTTPS CONFIGS
-# =========================
-
 - name: Regenerate HTTPS configs for apps
   include_tasks: generate-nginx-app.yml
   loop: "{{ apps }}"
@@ -144,7 +121,13 @@
     loop_var: app
   vars:
     ssl_enabled: true
-  when: app.environments.prod.domain in ssl_ready_domains
+    environments_to_use: >-
+      {{
+        app.environments
+        | dict2items
+        | selectattr('value.domain', 'in', ssl_ready_domains)
+        | list
+      }}
 
 - name: Generate HTTPS configs for extra tools
   template:
@@ -153,10 +136,6 @@
     mode: "0644"
   loop: "{{ extra_domains }}"
   when: item.domain in ssl_ready_domains
-
-# =========================
-# ENABLE HTTPS SITES
-# =========================
 
 - name: Enable HTTPS sites for extra tools
   file:
@@ -183,10 +162,6 @@
     app: "{{ apps | selectattr('environments.' + env.key + '.domain', 'in', ssl_ready_domains) | first }}"
   when: app is defined
 
-# =========================
-# CLEAN INVALID HTTPS CONFIGS
-# =========================
-
 - name: Remove HTTPS configs without certificates (sites-available)
   file:
     path: "/etc/nginx/sites-available/extra-{{ item | replace('.', '-') }}.conf"
@@ -198,10 +173,6 @@
     path: "/etc/nginx/sites-enabled/extra-{{ item | replace('.', '-') }}.conf"
     state: absent
   loop: "{{ all_domains | difference(ssl_ready_domains) }}"
-
-# =========================
-# FINAL VALIDATION
-# =========================
 
 - name: Test nginx HTTPS config
   command: nginx -t

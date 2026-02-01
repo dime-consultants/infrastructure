@@ -12,17 +12,24 @@ apps:
       prod:
         domain: app.mchangohub.com
         port: 8000
-  
-#  - name: zanaka-ui
-#    repo: SteveNdegwa/zanaka-ui
-#    environments:
-#      prod:
-#        domain: api.mchangohub.com
-#        port: 4000
 
+  - name: rentwave-backend
+    repo: rentwave/mvpm
+    environments:
+      prod:
+        domain: app.rentwave.africa
+        port: 8002
+      stage:
+        domain: stage-app.rentwave.africa
+        port: 8001
 
-# Additional internal/admin tools exposed via subdomains
-# These are NOT full apps with their own repo/deploy — just reverse proxies
+  - name: rentwave-ui
+    repo: rentwave/mvpm-ui
+    environments:
+      prod:
+        domain: rentwave.africa
+        port: 3000
+
 extra_domains:
    - domain: flower.mchangohub.com
      proxy_port: 5555

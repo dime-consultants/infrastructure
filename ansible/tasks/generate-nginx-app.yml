@@ -1,16 +1,15 @@
----
-- name: Create nginx config for {{ app.name }} (prod)
+- name: Create nginx config for {{ app.name }} ({{ env.key }})
   template:
     src: ../templates/nginx-app.j2
-    dest: "/etc/nginx/sites-available/{{ app.name }}-prod.conf"
+    dest: "/etc/nginx/sites-available/{{ app.name }}-{{ env.key }}.conf"
     mode: '0644'
   vars:
-    domain: "{{ app.environments.prod.domain }}"
-    backend_port: "{{ app.environments.prod.port }}"
+    domain: "{{ env.value.domain }}"
+    backend_port: "{{ env.value.port }}"
     ssl_enabled: "{{ ssl_enabled | default(false) }}"
 
-- name: Enable {{ app.name }} prod
+- name: Enable {{ app.name }} {{ env.key }}
   file:
-    src: "/etc/nginx/sites-available/{{ app.name }}-prod.conf"
-    dest: "/etc/nginx/sites-enabled/{{ app.name }}-prod.conf"
+    src: "/etc/nginx/sites-available/{{ app.name }}-{{ env.key }}.conf"
+    dest: "/etc/nginx/sites-enabled/{{ app.name }}-{{ env.key }}.conf"
     state: link
