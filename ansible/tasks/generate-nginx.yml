@@ -51,12 +51,14 @@
   loop: "{{ apps }}"
   loop_control:
     loop_var: app
+    label: "{{ app.name }}"
   vars:
     ssl_enabled: false
     environments_to_use: >-
       {{
         app.environments
         | dict2items
+        | list
       }}
 
 - name: Generate HTTP configs for extra tools
@@ -115,7 +117,7 @@
         | list
       }}
 
-- name: Regenerate HTTPS configs for apps
+- name: Regenerate HTTPS configs for apps (only environments with certificates)
   include_tasks: generate-nginx-app.yml
   loop: "{{ apps }}"
   loop_control:
@@ -127,6 +129,7 @@
       {{
         app.environments
         | dict2items
+        | selectattr('value.domain', 'defined')
         | selectattr('value.domain', 'in', ssl_ready_domains)
         | list
       }}

@@ -1,22 +1,26 @@
 ---
-- name: Create nginx config for {{ app.name }} ({{ env_item.key }})
+# generate-nginx-app.yml — works for both HTTP and HTTPS phases
+
+- name: Create nginx config
   template:
     src: ../templates/nginx-app.j2
-    dest: "/etc/nginx/sites-available/{{ app.name }}-{{ env_item.key }}.conf"
+    dest: "/etc/nginx/sites-available/{{ app.name }}-{{ env.key }}.conf"
     mode: '0644'
   vars:
-    domain: "{{ env_item.value.domain }}"
-    backend_port: "{{ env_item.value.port | default(omit) }}"
-    ssl_enabled: "{{ ssl_enabled | default(false) }}"
+    domain: "{{ env.value.domain | mandatory }}"
+    backend_port: "{{ env.value.port | mandatory }}"
+    ssl_enabled: "{{ ssl_enabled | default(false) | bool }}"
   loop: "{{ environments_to_use }}"
   loop_control:
-    loop_var: env_item
+    loop_var: env
+    label: "{{ app.name }} - {{ env.key }} ({{ 'HTTPS' if ssl_enabled else 'HTTP' }})"
 
-- name: Enable {{ app.name }} {{ env_item.key }}
+- name: Enable nginx site
   file:
-    src: "/etc/nginx/sites-available/{{ app.name }}-{{ env_item.key }}.conf"
-    dest: "/etc/nginx/sites-enabled/{{ app.name }}-{{ env_item.key }}.conf"
+    src: "/etc/nginx/sites-available/{{ app.name }}-{{ env.key }}.conf"
+    dest: "/etc/nginx/sites-enabled/{{ app.name }}-{{ env.key }}.conf"
     state: link
   loop: "{{ environments_to_use }}"
   loop_control:
-    loop_var: env_item
+    loop_var: env
+    label: "{{ app.name }} - {{ env.key }}"
