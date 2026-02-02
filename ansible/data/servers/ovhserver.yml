@@ -17,10 +17,10 @@ apps:
     repo: rentwave/mvpm
     environments:
       prod:
-        domain: app.rentwaveafrica.co.ke
+        domain: api.rentwaveafrica.co.ke
         port: 8001
       stage:
-        domain: stage-app.rentwaveafrica.co.ke
+        domain: stage-api.rentwaveafrica.co.ke
         port: 8002
 
   - name: rentwave-ui
@@ -28,7 +28,10 @@ apps:
     environments:
       prod:
         domain: rentwaveafrica.co.ke
-        port: 3000
+        port: 3001
+      stage:
+        domain: stage-rentwaveafrica.co.ke
+        port: 3002
 
 extra_domains:
    - domain: flower.mchangohub.com
