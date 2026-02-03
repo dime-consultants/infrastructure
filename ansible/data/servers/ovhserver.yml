@@ -30,7 +30,7 @@ apps:
         domain: rentwaveafrica.co.ke
         port: 3001
       stage:
-        domain: stage-rentwaveafrica.co.ke
+        domain: stage.rentwaveafrica.co.ke
         port: 3002
 
 extra_domains:
