@@ -18,7 +18,7 @@ apps:
     environments:
       prod:
         domain: api.rentwaveafrica.co.ke
-        port: 8001
+        port: 8003
       stage:
         domain: stage-api.rentwaveafrica.co.ke
         port: 8002
