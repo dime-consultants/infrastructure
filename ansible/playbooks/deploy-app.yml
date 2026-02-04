@@ -32,7 +32,7 @@
         line: "IMAGE_TAG={{ force_image_tag | default(omit) }}"
       when: force_image_tag is defined
 
-    - name: Deploy with Docker Compose (pull + always recreate)
+    - name: Deploy with Docker Compose
       community.docker.docker_compose_v2:
         project_src: "{{ app_dir }}"
         project_name: "{{ app_name }}_{{ env | default('prod') }}"
@@ -50,3 +50,15 @@
         wait_timeout: 300
       register: compose_output
       changed_when: true
+
+    - name: Post-deploy cleanup – remove unused Docker data
+      ansible.builtin.command: >
+        docker system prune -af
+      register: docker_prune_output
+      changed_when: "'Total reclaimed space' in docker_prune_output.stdout"
+
+    - name: Post-deploy cleanup – remove Docker build cache
+      ansible.builtin.command: >
+        docker builder prune -af
+      register: docker_builder_prune_output
+      changed_when: "'Total reclaimed space' in docker_builder_prune_output.stdout"
