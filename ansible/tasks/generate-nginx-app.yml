@@ -1,6 +1,4 @@
 ---
-# generate-nginx-app.yml — works for both HTTP and HTTPS phases
-
 - name: Create nginx config
   template:
     src: ../templates/nginx-app.j2
