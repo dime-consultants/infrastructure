@@ -32,6 +32,14 @@
         line: "IMAGE_TAG={{ force_image_tag | default(omit) }}"
       when: force_image_tag is defined
 
+    - name: Stop and remove existing stack
+      community.docker.docker_compose_v2:
+          project_src: "{{ app_dir }}"
+          project_name: "{{ app_name }}_{{ env | default('prod') }}"
+          state: absent
+          remove_volumes: false
+          remove_orphans: true
+
     - name: Deploy with Docker Compose
       community.docker.docker_compose_v2:
         project_src: "{{ app_dir }}"
