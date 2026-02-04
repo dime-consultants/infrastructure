@@ -18,10 +18,10 @@ apps:
     environments:
       prod:
         domain: api.rentwaveafrica.co.ke
-        port: 8003
+        port: 8002
       stage:
         domain: stage-api.rentwaveafrica.co.ke
-        port: 8002
+        port: 8003
 
   - name: rentwave-ui
     repo: rentwave/mvpm-ui
