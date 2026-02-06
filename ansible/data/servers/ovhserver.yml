@@ -6,12 +6,6 @@ public_ip: 51.77.147.233
 firewall_extra_ports: []
 
 apps:
-  - name: zanaka
-    repo: SteveNdegwa/zanaka
-    environments:
-      prod:
-        domain: api.stmarysacademy.sc.ke
-        port: 8000
 
   - name: rentwave-backend
     repo: rentwave/mvpm
