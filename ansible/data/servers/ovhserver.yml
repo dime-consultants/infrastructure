@@ -6,6 +6,15 @@ public_ip: 51.77.147.233
 firewall_extra_ports: []
 
 apps:
+  - name: zanaka-backend
+    repo: stevendegwa/zanaka
+    environments:
+      prod:
+        domain: api.stmarysacademy.sc.ke
+        port: 8000
+      stage:
+        domain: stage-api.stmarysacademy.sc.ke
+        port: 8001
 
   - name: rentwave-backend
     repo: rentwave/mvpm
@@ -26,6 +35,16 @@ apps:
       stage:
         domain: stage.rentwaveafrica.co.ke
         port: 3002
+
+  - name: rentwave-utilities-backend
+    repo: stevendegwa/mvpm-utilities
+    environments:
+      prod:
+        domain: utilities.rentwaveafrica.co.ke
+        port: 8005
+      stage:
+        domain: stage-utilities.rentwaveafrica.co.ke
+        port: 8006
 
 extra_domains:
    - domain: flower.mchangohub.com
