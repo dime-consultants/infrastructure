@@ -6,6 +6,20 @@ public_ip: 51.77.147.233
 firewall_extra_ports: []
 
 apps:
+  - name: quidpath-backend
+    repo: stevendegwa/quidpath
+    environments:
+      prod:
+        domain: api.quidpath.com
+        port: 8004
+
+  - name: quidpath-frontend
+    repo: stevendegwa/quidpath
+    environments:
+      prod:
+        domain: quidpath.com
+        port: 3007
+
   - name: zanaka-backend
     repo: stevendegwa/zanaka
     environments:
