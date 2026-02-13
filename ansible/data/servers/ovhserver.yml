@@ -67,6 +67,13 @@ apps:
         domain: stage-utilities.rentwaveafrica.co.ke
         port: 8006
 
+  - name: st-marys-academy-website
+    repo: stevendegwa/st-marys-academy-website
+    environments:
+      prod:
+        domain: stmarysacademy.sc.ke
+        port: 3003
+
 extra_domains:
    - domain: flower.mchangohub.com
      proxy_port: 5555
