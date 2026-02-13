@@ -21,5 +21,3 @@ for filename in os.listdir(servers_dir):
             "ansible_user": data["ssh_user"],
             **{k: v for k, v in data.items() if k not in ("server_name", "ssh_user", "public_ip")}
         }
-
-print(json.dumps(inventory))
