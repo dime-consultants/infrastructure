@@ -68,6 +68,8 @@ jobs:
         env:
             ANSIBLE_HOST_KEY_CHECKING: False
             SSH_PRIVATE_KEY: ${{ secrets[format('{0}', matrix.secret_name)] }}
+            BASIC_AUTH_USERNAME: ${{ secrets.BASIC_AUTH_USERNAME }}
+            BASIC_AUTH_PASSWORD: ${{ secrets.BASIC_AUTH_PASSWORD }}
         run: |
             echo "Configuring ${{ matrix.server }}"
 

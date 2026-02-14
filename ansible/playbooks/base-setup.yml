@@ -102,6 +102,22 @@
         state: directory
         mode: '0755'
 
+    - name: Install htpasswd utility
+      apt:
+        name: apache2-utils
+        state: present
+
+    - name: Create or update .htpasswd file with basic auth credentials
+      community.general.htpasswd:
+        path: /etc/nginx/.htpasswd
+        name: "{{ basic_auth_username }}"
+        password: "{{ basic_auth_password }}"
+        owner: root
+        group: www-data
+        mode: '0640'
+        state: present
+      when: basic_auth_username is defined and basic_auth_password is defined
+
     - name: Generate Nginx sites for all apps and environments
       include_tasks: ../tasks/generate-nginx.yml
       vars:
