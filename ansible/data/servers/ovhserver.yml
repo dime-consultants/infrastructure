@@ -75,12 +75,13 @@ apps:
         port: 3003
 
 extra_domains:
-   - domain: flower.mchangohub.com
+   - domain: flower.stmarysacademy.sc.ke
      proxy_port: 5555
+     basic_auth: true
    - domain: portainer.rentwaveafrica.co.ke
      proxy_port: 9000
    - domain: grafana.rentwaveafrica.co.ke
      proxy_port: 3000
-   - domain: rabbit.mchangohub.com
+   - domain: rabbit.stmarysacademy.sc.ke
      proxy_port: 15672
      basic_auth: true
