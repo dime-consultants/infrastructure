@@ -1,5 +1,7 @@
 name: Deploy App (from repository_dispatch)
 
+run-name: Deploy ${{ github.event.client_payload.app_repo }} ${{ github.event.client_payload.env }}
+
 on:
   repository_dispatch:
     types: [deploy-app]
