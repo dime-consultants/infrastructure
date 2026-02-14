@@ -82,6 +82,6 @@ extra_domains:
      proxy_port: 9000
    - domain: grafana.rentwaveafrica.co.ke
      proxy_port: 3000
-   - domain: rabbit.stmarysacademy.sc.ke
+   - domain: rabbitmq.stmarysacademy.sc.ke
      proxy_port: 15672
      basic_auth: true
