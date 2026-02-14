@@ -37,6 +37,16 @@ apps:
         domain: stage-api.stmarysacademy.sc.ke
         port: 8001
 
+  - name: zanaka-ui
+    repo: stevendegwa/zanaka-ui
+    environments:
+      prod:
+        domain: app.stmarysacademy.sc.ke
+        port: 3000
+      stage:
+        domain: stage-app.stmarysacademy.sc.ke
+        port: 3004
+
   - name: rentwave-backend
     repo: rentwave/mvpm
     environments:
