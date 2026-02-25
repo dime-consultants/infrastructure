@@ -51,10 +51,10 @@ apps:
     environments:
       prod:
         domain: app.stmarysacademy.sc.ke
-        port: 3000
+        port: 3004
       stage:
         domain: stage-app.stmarysacademy.sc.ke
-        port: 3004
+        port: 3005
 
   - name: rentwave-backend
     repo: rentwave/mvpm
