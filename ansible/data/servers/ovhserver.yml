@@ -23,8 +23,8 @@ apps:
         domain: quidpath.com
         port: 3007
       stage:
-        domain: stage-quidpath.com
-        port: 3013
+        domain: stage.quidpath.com
+        port: 3012
 
   - name: quidpath-billing
     repo: bethwelkimutai/quidpath-billing
