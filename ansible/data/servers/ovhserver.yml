@@ -7,7 +7,7 @@ firewall_extra_ports: []
 
 apps:
   - name: quidpath-backend
-    repo: bethwelkimutai/quidpath-erp-backend
+    repo: quidpath/backend
     environments:
       prod:
         domain: api.quidpath.com
@@ -17,7 +17,7 @@ apps:
         port: 8011
 
   - name: quidpath-frontend
-    repo: bethwelkimutai/quidpath-erp-frontend
+    repo: quidpath/frontend
     environments:
       prod:
         domain: quidpath.com
@@ -27,7 +27,7 @@ apps:
         port: 3012
 
   - name: quidpath-billing
-    repo: bethwelkimutai/quidpath-billing
+    repo: quidpath/billing
     environments:
       prod:
         domain: billing.quidpath.com
@@ -35,6 +35,56 @@ apps:
       stage:
         domain: stage-billing.quidpath.com
         port: 8012
+
+  - name: quidpath-HRM
+    repo: quidpath/HRM
+    environments:
+      prod:
+        domain: hrm.quidpath.com
+        port: 8008
+      stage:
+        domain: stage-hrm.quidpath.com
+        port: 8013
+
+  - name: quidpath-inventory
+    repo: quidpath/Inventory
+    environments:
+      prod:
+        domain: inventory.quidpath.com
+        port: 8014
+      stage:
+        domain: stage-inventory.quidpath.com
+        port: 8015
+
+  - name: quidpath-crm
+    repo: quidpath/CRM
+    environments:
+      prod:
+        domain: crm.quidpath.com
+        port: 8016
+      stage:
+        domain: stage-crm.quidpath.com
+        port: 8017
+
+  - name: quidpath-pos
+    repo: quidpath/POS
+    environments:
+      prod:
+        domain: pos.quidpath.com
+        port: 8018
+      stage:
+        domain: stage-pos.quidpath.com
+        port: 8019
+
+  - name: quidpath-projects
+    repo: quidpath/Project-Management
+    environments:
+      prod:
+        domain: projects.quidpath.com
+        port: 8020
+      stage:
+        domain: stage-projects.quidpath.com
+        port: 8021
 
   - name: zanaka-backend
     repo: stevendegwa/zanaka
