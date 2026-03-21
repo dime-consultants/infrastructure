@@ -36,8 +36,8 @@ apps:
         domain: stage-billing.quidpath.com
         port: 8012
 
-  - name: quidpath-HRM
-    repo: quidpath/HRM
+  - name: quidpath-hrm
+    repo: quidpath/hrm
     environments:
       prod:
         domain: hrm.quidpath.com
@@ -47,7 +47,7 @@ apps:
         port: 8013
 
   - name: quidpath-inventory
-    repo: quidpath/Inventory
+    repo: quidpath/inventory
     environments:
       prod:
         domain: inventory.quidpath.com
@@ -57,7 +57,7 @@ apps:
         port: 8015
 
   - name: quidpath-crm
-    repo: quidpath/CRM
+    repo: quidpath/crm
     environments:
       prod:
         domain: crm.quidpath.com
@@ -67,7 +67,7 @@ apps:
         port: 8017
 
   - name: quidpath-pos
-    repo: quidpath/POS
+    repo: quidpath/pos
     environments:
       prod:
         domain: pos.quidpath.com
@@ -77,7 +77,7 @@ apps:
         port: 8019
 
   - name: quidpath-projects
-    repo: quidpath/Project-Management
+    repo: quidpath/project-management
     environments:
       prod:
         domain: projects.quidpath.com
