@@ -6,86 +6,6 @@ public_ip: 51.77.147.233
 firewall_extra_ports: []
 
 apps:
-  - name: quidpath-backend
-    repo: quidpath/backend
-    environments:
-      prod:
-        domain: api.quidpath.com
-        port: 8004
-      stage:
-        domain: stage-api.quidpath.com
-        port: 8011
-
-  - name: quidpath-frontend
-    repo: quidpath/frontend
-    environments:
-      prod:
-        domain: quidpath.com
-        port: 3007
-      stage:
-        domain: stage.quidpath.com
-        port: 3012
-
-  - name: quidpath-billing
-    repo: quidpath/billing
-    environments:
-      prod:
-        domain: billing.quidpath.com
-        port: 8007
-      stage:
-        domain: stage-billing.quidpath.com
-        port: 8012
-
-  - name: quidpath-hrm
-    repo: quidpath/hrm
-    environments:
-      prod:
-        domain: hrm.quidpath.com
-        port: 8008
-      stage:
-        domain: stage-hrm.quidpath.com
-        port: 8013
-
-  - name: quidpath-inventory
-    repo: quidpath/inventory
-    environments:
-      prod:
-        domain: inventory.quidpath.com
-        port: 8014
-      stage:
-        domain: stage-inventory.quidpath.com
-        port: 8015
-
-  - name: quidpath-crm
-    repo: quidpath/crm
-    environments:
-      prod:
-        domain: crm.quidpath.com
-        port: 8016
-      stage:
-        domain: stage-crm.quidpath.com
-        port: 8017
-
-  - name: quidpath-pos
-    repo: quidpath/pos
-    environments:
-      prod:
-        domain: pos.quidpath.com
-        port: 8018
-      stage:
-        domain: stage-pos.quidpath.com
-        port: 8019
-
-  - name: quidpath-projects
-    repo: quidpath/project-management
-    environments:
-      prod:
-        domain: projects.quidpath.com
-        port: 8020
-      stage:
-        domain: stage-projects.quidpath.com
-        port: 8021
-
   - name: zanaka-backend
     repo: stevendegwa/zanaka
     environments:
@@ -142,6 +62,26 @@ apps:
       prod:
         domain: stmarysacademy.sc.ke
         port: 3003
+
+  - name: lipasync-backend
+    repo: jkmutua/lipasync
+    environments:
+      prod:
+        domain: api.lipasync.com
+        port: 8007
+      stage:
+        domain: stage-api.lipasync.com
+        port: 8008
+
+  - name: lipasync-ui
+    repo: jkmutua/lipasync-ui
+    environments:
+      prod:
+        domain: lipasync.com
+        port: 3006
+      stage:
+        domain: stage.lipasync.com
+        port: 3007
 
 extra_domains:
    - domain: flower.stmarysacademy.sc.ke
