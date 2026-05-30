@@ -83,6 +83,27 @@ apps:
         domain: stage.lipasync.com
         port: 3007
 
+  - name: quidpath-backend
+    repo: quidpath/quidpath
+    environments:
+      prod:
+        domain: api.quidpath.com
+        port: 8004
+      stage:
+        domain: stage-api.quidpath.com
+        port: 8011
+
+  - name: quidpath-ui
+    repo: quidpath/v1-ui
+    environments:
+      prod:
+        domain: quidpath.com
+        port: 3008
+      stage:
+        domain: stage.quidpath.com
+        port: 3009
+
+
 extra_domains:
    - domain: flower.stmarysacademy.sc.ke
      proxy_port: 5555
