@@ -110,7 +110,7 @@ apps:
         domain: qb.lipasync.com
         port: 8012
       stage:
-        domain: stage-api.lipasync.com
+        domain: stage-qb.lipasync.com
         port: 8013
 
   - name: qb-ui
