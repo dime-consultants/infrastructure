@@ -103,6 +103,25 @@ apps:
         domain: stage.quidpath.com
         port: 3009
 
+  - name: qb-backend
+    repo: sosiru/qb
+    environments:
+      prod:
+        domain: api.lipasync.com
+        port: 8012
+      stage:
+        domain: stage-api.lipasync.com
+        port: 8013
+
+  - name: qb-ui
+    repo: sosiru/qb-ui
+    environments:
+      prod:
+        domain: qb-ui.lipasync.com
+        port: 3010
+      stage:
+        domain: stage-qb-ui.lipasync.com
+        port: 3011
 
 extra_domains:
    - domain: flower.stmarysacademy.sc.ke
