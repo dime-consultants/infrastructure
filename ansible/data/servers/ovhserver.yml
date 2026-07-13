@@ -107,7 +107,7 @@ apps:
     repo: sosiru/qb
     environments:
       prod:
-        domain: api.lipasync.com
+        domain: qb.lipasync.com
         port: 8012
       stage:
         domain: stage-api.lipasync.com
