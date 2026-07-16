@@ -123,6 +123,26 @@ apps:
         domain: stage-qb-ui.lipasync.com
         port: 3011
 
+  - name: payments
+    repo: stevendegwa/payments
+    environments:
+      prod:
+        domain: payments.lipasync.com
+        port: 8014
+      stage:
+        domain: stage-payments.lipasync.com
+        port: 8015
+
+  - name: notification-bus
+    repo: stevendegwa/notification-bus
+    environments:
+      prod:
+        domain: notify.lipasync.com
+        port: 8016
+      stage:
+        domain: stage-notify.lipasync.com
+        port: 8017
+
 extra_domains:
    - domain: flower.stmarysacademy.sc.ke
      proxy_port: 5555
