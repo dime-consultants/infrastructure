@@ -267,6 +267,14 @@ jobs:
           TARGET_SERVER: ${{ matrix.server }}
           TARGET_PUBLIC_IP: ${{ secrets[format('{0}', matrix.public_ip_secret_name)] }}
           TARGET_SSH_USER: ${{ secrets[format('{0}', matrix.ssh_user_secret_name)] }}
+          POSTGRES_PROD_USER: ${{ secrets.POSTGRES_PROD_USER }}
+          POSTGRES_PROD_PASSWORD: ${{ secrets.POSTGRES_PROD_PASSWORD }}
+          POSTGRES_STAGE_USER: ${{ secrets.POSTGRES_STAGE_USER }}
+          POSTGRES_STAGE_PASSWORD: ${{ secrets.POSTGRES_STAGE_PASSWORD }}
+          RABBITMQ_PROD_USER: ${{ secrets.RABBITMQ_PROD_USER }}
+          RABBITMQ_PROD_PASSWORD: ${{ secrets.RABBITMQ_PROD_PASSWORD }}
+          RABBITMQ_STAGE_USER: ${{ secrets.RABBITMQ_STAGE_USER }}
+          RABBITMQ_STAGE_PASSWORD: ${{ secrets.RABBITMQ_STAGE_PASSWORD }}
         run: |
 
           # Write key to a temp file
@@ -281,6 +289,7 @@ jobs:
             --inventory ansible/inventory/dynamic_inventory.py \
             --extra-vars "target_server=${{ matrix.server }}" \
             --extra-vars "app_name=$app_name" \
+            --extra-vars "app_repo=${{ github.event.client_payload.app_repo }}" \
             --extra-vars "env=$env" \
             --extra-vars "compose_file=/tmp/docker-compose.yml" \
             --extra-vars "env_file=/tmp/.env" \
