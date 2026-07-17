@@ -4,6 +4,8 @@
     rabbitmq_namespace: "{{ rabbitmq_app_env.rabbitmq_namespace }}"
     rabbitmq_username: "{{ lookup('env', rabbitmq_secret_names.username) }}"
     rabbitmq_password: "{{ lookup('env', rabbitmq_secret_names.password) }}"
+    rabbitmq_shared_project_dir: "{{ shared_service_base_dir }}/{{ shared_service_name }}/{{ shared_service_env }}"
+    rabbitmq_shared_project_name: "shared_{{ shared_service_name }}_{{ shared_service_env }}"
 
 - name: Validate RabbitMQ namespace credentials
   assert:
@@ -15,10 +17,25 @@
 
 - name: Provision RabbitMQ namespace
   ansible.builtin.shell: |
+    set -eu
+
+    RABBITMQ_CONTAINER="$(
+      docker compose \
+        --project-directory "{{ rabbitmq_shared_project_dir }}" \
+        -p "{{ rabbitmq_shared_project_name }}" \
+        -f "{{ rabbitmq_shared_project_dir }}/docker-compose.yml" \
+        ps -q rabbitmq
+    )"
+
+    if [ -z "$RABBITMQ_CONTAINER" ]; then
+      echo "RabbitMQ shared service container not found for {{ rabbitmq_shared_project_name }}" >&2
+      exit 1
+    fi
+
     docker exec \
       -e RABBITMQ_NAMESPACE \
       -e RABBITMQ_USERNAME \
-      shared_{{ shared_service_name }}_{{ shared_service_env }}-rabbitmq-1 \
+      "$RABBITMQ_CONTAINER" \
       sh -s <<'SH'
     rabbitmqctl add_vhost "$RABBITMQ_NAMESPACE" || true
     rabbitmqctl set_permissions -p "$RABBITMQ_NAMESPACE" "$RABBITMQ_USERNAME" ".*" ".*" ".*"

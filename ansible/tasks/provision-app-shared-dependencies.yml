@@ -1,0 +1,13 @@
+---
+- name: Resolve app shared service subscriptions
+  set_fact:
+    app_postgres_subscription: "{{ shared_services | default([]) | selectattr('name', 'equalto', 'postgres') | first | default({}) }}"
+    app_rabbitmq_subscription: "{{ shared_services | default([]) | selectattr('name', 'equalto', 'rabbitmq') | first | default({}) }}"
+
+- name: Provision shared dependencies for app environments
+  include_tasks: provision-app-shared-dependencies-for-app.yml
+  loop: "{{ apps | default([]) }}"
+  loop_control:
+    loop_var: shared_dependency_app
+    label: "{{ shared_dependency_app.name }}"
+

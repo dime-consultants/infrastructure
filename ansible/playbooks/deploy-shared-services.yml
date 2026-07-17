@@ -15,3 +15,6 @@
         label: "{{ shared_service_subscription_item.name }}"
       vars:
         shared_service_subscription: "{{ shared_service_subscription_item }}"
+
+    - name: Provision app databases and broker namespaces
+      include_tasks: ../tasks/provision-app-shared-dependencies.yml

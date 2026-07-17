@@ -97,6 +97,11 @@ apps:
         rabbitmq_namespace: payments
 ```
 
+Base setup and the shared-services playbook create every declared
+`postgres_database` and RabbitMQ vhost after the shared containers are running.
+The app deploy playbook repeats the same provisioning idempotently before
+starting app containers, so migrations do not race a missing database.
+
 The deploy workflow appends `DATABASE_DB` when `postgres_database` is present
 and RabbitMQ credentials / `CELERY_BROKER_URL` when `rabbitmq_namespace` is
 present. RabbitMQ namespaces are provisioned as vhosts on the shared RabbitMQ
