@@ -86,6 +86,9 @@
       vars:
         shared_service_subscription: "{{ shared_service_subscription_item }}"
 
+    - name: Stop unsubscribed shared services
+      include_tasks: ../tasks/cleanup-unsubscribed-shared-services.yml
+
     - name: Provision app databases and broker namespaces
       include_tasks: ../tasks/provision-app-shared-dependencies.yml
 

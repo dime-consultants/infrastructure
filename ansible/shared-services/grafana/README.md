@@ -8,26 +8,26 @@ shared_services:
     environments:
       prod:
         domain: grafana.example.com
-      stage: {}
 ```
+
+Grafana is usually only needed once per server, so subscribe the production
+environment only. It runs on the production shared network, `shared-prod`.
 
 Application compose files usually do not need to reference Grafana. Exporters or
 sidecars that should be reachable from Grafana can attach to the matching shared
 network.
 
 ```yaml
+networks:
+  default:
+    name: ${SHARED_NETWORK} # prod=shared-prod, stage=shared-stage
+    external: true
+
 services:
   exporter:
-    networks:
-      - app
-      - shared
-
-networks:
-  app:
-  shared:
-    name: shared-prod # use shared-stage for stage deployments
-    external: true
+    image: ${IMAGE_TAG}
 ```
 
-Production Grafana is published on `127.0.0.1:3000`; stage is published on
-`127.0.0.1:3100`.
+Production Grafana is published on `127.0.0.1:3000`. Stage support exists in
+the shared-service catalog, but servers should only subscribe to it if they
+intentionally need a separate stage Grafana instance.

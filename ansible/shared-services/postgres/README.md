@@ -34,7 +34,7 @@ x-app-env: &app-env
 
 networks:
   default:
-    name: ${SHARED_NETWORK}
+    name: ${SHARED_NETWORK} # prod=shared-prod, stage=shared-stage
     external: true
 
 services:

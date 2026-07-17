@@ -1,0 +1,26 @@
+---
+- name: Resolve unsubscribed shared service project
+  set_fact:
+    cleanup_shared_service_project_dir: "{{ shared_service_base_dir }}/{{ cleanup_shared_service_name }}/{{ cleanup_shared_service_env }}"
+    cleanup_shared_service_project_name: "shared_{{ cleanup_shared_service_name }}_{{ cleanup_shared_service_env }}"
+    cleanup_shared_service_key: "{{ cleanup_shared_service_name }}:{{ cleanup_shared_service_env }}"
+
+- name: Check unsubscribed shared service compose file
+  stat:
+    path: "{{ cleanup_shared_service_project_dir }}/docker-compose.yml"
+  register: cleanup_shared_service_compose
+  when: "'|' ~ cleanup_shared_service_key ~ '|' not in subscribed_shared_service_keys"
+
+- name: Stop unsubscribed shared service
+  community.docker.docker_compose_v2:
+    project_src: "{{ cleanup_shared_service_project_dir }}"
+    project_name: "{{ cleanup_shared_service_project_name }}"
+    files:
+      - docker-compose.yml
+    state: absent
+    remove_volumes: false
+    remove_orphans: true
+  when:
+    - "'|' ~ cleanup_shared_service_key ~ '|' not in subscribed_shared_service_keys"
+    - cleanup_shared_service_compose.stat.exists | default(false)
+

@@ -20,12 +20,10 @@ shared_services:
     environments:
       prod:
         domain: portainer.rentwaveafrica.co.ke
-      stage: {}
   - name: grafana
     environments:
       prod:
         domain: grafana.rentwaveafrica.co.ke
-      stage: {}
   - name: flower
     environments:
       prod:

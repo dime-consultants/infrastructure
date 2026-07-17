@@ -15,6 +15,12 @@ The service catalog lives in `ansible/data/shared-services.yml`. Each service ha
 one reusable Docker Compose file under `ansible/shared-services/<service>/` and
 is deployed once per environment into `/opt/shared-services/<service>/<env>`.
 
+Base config reconciles these subscriptions. If a shared service environment is
+removed from a server file, the next base-config run stops that Compose project
+without deleting its Docker volume. Services that remain subscribed are applied
+again, so Docker Compose may recreate them if their compose file, image, or env
+changed.
+
 Public domains for shared service UIs are declared on the subscribed service, not
 in `extra_domains`:
 
@@ -38,7 +44,7 @@ shared network:
 ```yaml
 networks:
   default:
-    name: ${SHARED_NETWORK}
+    name: ${SHARED_NETWORK} # prod=shared-prod, stage=shared-stage
     external: true
 
 services:
@@ -60,7 +66,7 @@ every service that connects to PostgreSQL, RabbitMQ, or another shared service:
 networks:
   app:
   shared:
-    name: ${SHARED_NETWORK}
+    name: ${SHARED_NETWORK} # prod=shared-prod, stage=shared-stage
     external: true
 
 services:

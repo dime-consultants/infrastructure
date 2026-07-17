@@ -16,5 +16,8 @@ Flower connects to RabbitMQ through `CELERY_BROKER_URL`. Set it with
 `shared_service_secrets.flower.<env>.broker_url` or add `broker_url` directly
 under the environment.
 
+Flower is attached to the matching shared network: production uses
+`shared-prod`, and stage uses `shared-stage`.
+
 Production Flower is published on `127.0.0.1:5555`; stage is published on
 `127.0.0.1:5556`.

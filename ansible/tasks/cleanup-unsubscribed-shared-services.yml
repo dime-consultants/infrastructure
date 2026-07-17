@@ -1,0 +1,20 @@
+---
+- name: Resolve subscribed shared service keys
+  set_fact:
+    subscribed_shared_service_keys: >-
+      {%- set keys = [] -%}
+      {%- for service in shared_services | default([]) -%}
+      {%- set environments = service.environments.keys() | list if service.environments is mapping else service.environments | default([]) -%}
+      {%- for environment in environments -%}
+      {%- set _ = keys.append(service.name ~ ':' ~ environment) -%}
+      {%- endfor -%}
+      {%- endfor -%}
+      |{{ keys | join('|') }}|
+
+- name: Reconcile shared service subscriptions
+  include_tasks: cleanup-unsubscribed-shared-service.yml
+  loop: "{{ shared_service_catalog | dict2items }}"
+  loop_control:
+    loop_var: cleanup_shared_service_item
+    label: "{{ cleanup_shared_service_item.key }}"
+

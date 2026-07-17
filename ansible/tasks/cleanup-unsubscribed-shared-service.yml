@@ -1,0 +1,11 @@
+---
+- name: Stop unsubscribed shared service environments
+  include_tasks: cleanup-unsubscribed-shared-service-env.yml
+  loop: "{{ cleanup_shared_service_item.value.environments | dict2items }}"
+  loop_control:
+    loop_var: cleanup_shared_service_env_item
+    label: "{{ cleanup_shared_service_item.key }}:{{ cleanup_shared_service_env_item.key }}"
+  vars:
+    cleanup_shared_service_name: "{{ cleanup_shared_service_item.key }}"
+    cleanup_shared_service_env: "{{ cleanup_shared_service_env_item.key }}"
+
