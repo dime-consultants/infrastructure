@@ -5,6 +5,7 @@
 
   vars_files:
     - ../data/common.yml
+    - ../data/shared-services.yml
 
   tasks:
     - name: Update apt cache
@@ -76,6 +77,14 @@
         name: "{{ common_packages }}"
         state: present
 
+    - name: Deploy subscribed shared services
+      include_tasks: ../tasks/deploy-shared-service-subscription.yml
+      loop: "{{ shared_services | default([]) }}"
+      loop_control:
+        label: "{{ item.name }}"
+      vars:
+        shared_service_subscription: "{{ item }}"
+
     - name: Enable and configure UFW
       ufw:
         state: enabled
@@ -123,6 +132,7 @@
       vars:
         apps: "{{ hostvars[inventory_hostname].apps | default([]) }}"
         extra_domains: "{{ hostvars[inventory_hostname].extra_domains | default([]) }}"
+        shared_services: "{{ hostvars[inventory_hostname].shared_services | default([]) }}"
 
   handlers:
     - name: Reload Nginx

@@ -23,11 +23,44 @@
         | list
       }}
 
+- name: Gather shared service domains
+  set_fact:
+    shared_service_domains_json: >-
+      {%- set domains = [] -%}
+      {%- for service in shared_services | default([]) -%}
+      {%- if service.name in shared_service_catalog and service.environments is mapping -%}
+      {%- for env_name, env_options in service.environments.items() -%}
+      {%- if env_options.domain is defined and env_name in shared_service_catalog[service.name].environments -%}
+      {%- set catalog_env = shared_service_catalog[service.name].environments[env_name] -%}
+      {%- set proxy_port = env_options.proxy_port
+          | default(catalog_env.management_port
+          | default(catalog_env.http_port
+          | default(catalog_env.published_port
+          | default(catalog_env.amqp_port | default(omit))))) -%}
+      {%- set _ = domains.append({
+        'domain': env_options.domain,
+        'proxy_port': proxy_port,
+        'basic_auth': env_options.basic_auth | default(false)
+      }) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ domains | to_json }}
+
+- name: Parse shared service domains
+  set_fact:
+    shared_service_domains: "{{ shared_service_domains_json | from_json }}"
+
+- name: Combine manually configured and shared service proxy domains
+  set_fact:
+    proxy_domains: "{{ (extra_domains | default([])) + (shared_service_domains | default([])) }}"
+
 - name: Gather extra-only domains
   set_fact:
     extra_only_domains: >-
       {{
-        extra_domains
+        proxy_domains
         | map(attribute='domain')
         | difference(app_domains)
         | list
@@ -66,7 +99,7 @@
     src: ../templates/nginx-extra-http.j2
     dest: "/etc/nginx/sites-available/extra-{{ item.domain | replace('.', '-') }}.conf"
     mode: "0644"
-  loop: "{{ extra_domains }}"
+  loop: "{{ proxy_domains }}"
 
 - name: Enable all HTTP sites
   file:
@@ -150,7 +183,7 @@
     src: ../templates/nginx-extra-https.j2
     dest: "/etc/nginx/sites-available/extra-{{ item.domain | replace('.', '-') }}.conf"
     mode: "0644"
-  loop: "{{ extra_domains }}"
+  loop: "{{ proxy_domains }}"
   when: item.domain in ssl_ready_domains
 
 - name: Enable HTTPS sites for extra tools
@@ -158,7 +191,7 @@
     src: "/etc/nginx/sites-available/extra-{{ item.domain | replace('.', '-') }}.conf"
     dest: "/etc/nginx/sites-enabled/extra-{{ item.domain | replace('.', '-') }}.conf"
     state: link
-  loop: "{{ extra_domains | selectattr('domain', 'in', ssl_ready_domains) | list }}"
+  loop: "{{ proxy_domains | selectattr('domain', 'in', ssl_ready_domains) | list }}"
 
 - name: Enable HTTPS sites for apps
   file:

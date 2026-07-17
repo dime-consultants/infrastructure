@@ -29,12 +29,18 @@ jobs:
                   path = os.path.join(servers_dir, filename)
                   with open(path) as f:
                       data = yaml.safe_load(f) or {}
+                      if data.get("enabled") is False:
+                          continue
                       server_name = data.get("server_name")
                       ssh_secret = data.get("ssh_secret_name")
-                      if server_name and ssh_secret:
+                      public_ip_secret = data.get("public_ip_secret_name")
+                      ssh_user_secret = data.get("ssh_user_secret_name")
+                      if server_name and ssh_secret and public_ip_secret and ssh_user_secret:
                           matrix_entries.append({
                               "server": server_name,
-                              "secret_name": ssh_secret
+                              "secret_name": ssh_secret,
+                              "public_ip_secret_name": public_ip_secret,
+                              "ssh_user_secret_name": ssh_user_secret
                           })
 
           matrix_json = json.dumps({"include": matrix_entries})
@@ -63,6 +69,8 @@ jobs:
                 if f.endswith(".yml"):
                     with open(os.path.join(servers_dir, f)) as file:
                         data = yaml.safe_load(file) or {}
+                        if data.get("enabled") is False:
+                            continue
                         # Case-insensitive repo match
                         if any(app.get("repo", "").lower() == repo.lower() for app in data.get("apps", [])):
                             server_name = data.get("server_name")
@@ -94,7 +102,7 @@ jobs:
         run: |
           pip install ansible yq
           sudo apt-get update && sudo apt-get install -y jq docker-compose
-          ansible-galaxy collection install community.docker:>3.0.0
+          ansible-galaxy collection install 'community.docker:>3.0.0'
 
       - name: Decode docker-compose.yml
         run: |
@@ -109,7 +117,143 @@ jobs:
           echo '${{ toJson(github.event.client_payload.env_secrets) }}' | \
             jq -r 'to_entries[] | "\(.key)=\(.value)"' >> /tmp/.env
 
+      - name: Append app environment metadata
+        if: ${{ contains(needs.prepare.outputs.servers, matrix.server) }}
+        env:
+          POSTGRES_PROD_USER: ${{ secrets.POSTGRES_PROD_USER }}
+          POSTGRES_PROD_PASSWORD: ${{ secrets.POSTGRES_PROD_PASSWORD }}
+          POSTGRES_STAGE_USER: ${{ secrets.POSTGRES_STAGE_USER }}
+          POSTGRES_STAGE_PASSWORD: ${{ secrets.POSTGRES_STAGE_PASSWORD }}
+          RABBITMQ_PROD_USER: ${{ secrets.RABBITMQ_PROD_USER }}
+          RABBITMQ_PROD_PASSWORD: ${{ secrets.RABBITMQ_PROD_PASSWORD }}
+          RABBITMQ_STAGE_USER: ${{ secrets.RABBITMQ_STAGE_USER }}
+          RABBITMQ_STAGE_PASSWORD: ${{ secrets.RABBITMQ_STAGE_PASSWORD }}
+        run: |
+          python3 <<'PY'
+          import os
+          import yaml
+
+          repo = "${{ github.event.client_payload.app_repo }}"
+          env_name = "${{ github.event.client_payload.env }}"
+          target_server = "${{ matrix.server }}"
+          servers_dir = "ansible/data/servers"
+          shared_services_path = "ansible/data/shared-services.yml"
+
+          with open(shared_services_path) as file:
+              shared_catalog = yaml.safe_load(file) or {}
+
+          shared_service_catalog = shared_catalog.get("shared_service_catalog", {})
+
+          def subscribed_environment(server, service_name, env_name):
+              for service in server.get("shared_services", []):
+                  if service.get("name") != service_name:
+                      continue
+                  environments = service.get("environments") or {}
+                  if isinstance(environments, dict) and env_name in environments:
+                      return environments[env_name] or {}
+                  if isinstance(environments, list) and env_name in environments:
+                      return {}
+              raise SystemExit(
+                  f"{target_server} must subscribe to shared service "
+                  f"{service_name}:{env_name} before deploying {repo} {env_name}"
+              )
+
+          def service_env_config(service_name, env_name):
+              service = shared_service_catalog.get(service_name, {})
+              environments = service.get("environments") or {}
+              if env_name not in environments:
+                  raise SystemExit(
+                      f"Shared service catalog has no {service_name}:{env_name} config"
+                  )
+              return environments[env_name] or {}
+
+          def secret_value(secret_names, key, label):
+              secret_name = secret_names.get(key)
+              if not secret_name:
+                  raise SystemExit(f"Missing secret_names.{key} for {label}")
+              value = os.environ.get(secret_name)
+              if not value:
+                  raise SystemExit(f"GitHub Secret {secret_name} is required for {label}")
+              return value
+
+          for filename in os.listdir(servers_dir):
+              if not filename.endswith(".yml"):
+                  continue
+              with open(os.path.join(servers_dir, filename)) as file:
+                  data = yaml.safe_load(file) or {}
+              if data.get("enabled") is False:
+                  continue
+              if data.get("server_name") != target_server:
+                  continue
+              for app in data.get("apps", []):
+                  if app.get("repo", "").lower() != repo.lower():
+                      continue
+                  app_env = (app.get("environments") or {}).get(env_name, {})
+                  namespace = app_env.get("celery_namespace")
+                  postgres_database = app_env.get("postgres_database")
+
+                  env_values = {}
+
+                  if postgres_database:
+                      subscribed_environment(data, "postgres", env_name)
+                      postgres_config = service_env_config("postgres", env_name)
+                      postgres_secret_names = postgres_config.get("secret_names") or {}
+                      env_values.update({
+                          "DATABASE_DB": postgres_database,
+                          "DATABASE_USER": secret_value(
+                              postgres_secret_names,
+                              "username",
+                              f"postgres:{env_name}",
+                          ),
+                          "DATABASE_PASSWORD": secret_value(
+                              postgres_secret_names,
+                              "password",
+                              f"postgres:{env_name}",
+                          ),
+                          "DATABASE_HOST": postgres_config.get("service_host", "postgres"),
+                          "DATABASE_PORT": "5432",
+                          "SHARED_NETWORK": postgres_config.get("network", f"shared-{env_name}"),
+                      })
+
+                  if namespace:
+                      subscribed_environment(data, "rabbitmq", env_name)
+                      rabbitmq_config = service_env_config("rabbitmq", env_name)
+                      rabbitmq_secret_names = rabbitmq_config.get("secret_names") or {}
+                      rabbitmq_user = secret_value(
+                          rabbitmq_secret_names,
+                          "username",
+                          f"rabbitmq:{env_name}",
+                      )
+                      rabbitmq_password = secret_value(
+                          rabbitmq_secret_names,
+                          "password",
+                          f"rabbitmq:{env_name}",
+                      )
+                      rabbitmq_host = rabbitmq_config.get("service_host", "rabbitmq")
+                      env_values.update({
+                          "CELERY_NAMESPACE": namespace,
+                          "RABBITMQ_DEFAULT_USER": rabbitmq_user,
+                          "RABBITMQ_DEFAULT_PASS": rabbitmq_password,
+                          "CELERY_BROKER_URL": (
+                              f"amqp://{rabbitmq_user}:{rabbitmq_password}"
+                              f"@{rabbitmq_host}:5672//"
+                          ),
+                          "SHARED_NETWORK": rabbitmq_config.get(
+                              "network",
+                              env_values.get("SHARED_NETWORK", f"shared-{env_name}"),
+                          ),
+                      })
+
+                  with open("/tmp/.env", "a") as env_file:
+                      for key, value in env_values.items():
+                          env_file.write(f"{key}={value}\n")
+                  raise SystemExit(0)
+
+          raise SystemExit(f"No app environment metadata found for {repo} {env_name} on {target_server}")
+          PY
+
       - name: Render final docker-compose
+        if: ${{ contains(needs.prepare.outputs.servers, matrix.server) }}
         run: |
           docker compose -f /tmp/docker-compose-raw.yml --env-file /tmp/.env config > /tmp/docker-compose.yml
 
@@ -118,6 +262,9 @@ jobs:
         env:
           ANSIBLE_HOST_KEY_CHECKING: False
           SSH_PRIVATE_KEY: ${{ secrets[format('{0}', matrix.secret_name)] }}
+          TARGET_SERVER: ${{ matrix.server }}
+          TARGET_PUBLIC_IP: ${{ secrets[format('{0}', matrix.public_ip_secret_name)] }}
+          TARGET_SSH_USER: ${{ secrets[format('{0}', matrix.ssh_user_secret_name)] }}
         run: |
 
           # Write key to a temp file
@@ -136,4 +283,3 @@ jobs:
             --extra-vars "compose_file=/tmp/docker-compose.yml" \
             --extra-vars "env_file=/tmp/.env" \
             --private-key "$KEY_FILE"
-            

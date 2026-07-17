@@ -1,0 +1,72 @@
+---
+- name: Validate shared service subscription
+  assert:
+    that:
+      - shared_service_name in shared_service_catalog
+      - shared_service_env in shared_service_catalog[shared_service_name].environments
+    fail_msg: >-
+      Unknown shared service subscription {{ shared_service_name }}:{{ shared_service_env }}.
+      Check ansible/data/shared-services.yml.
+
+- name: Resolve shared service config
+  set_fact:
+    shared_service_config: "{{ shared_service_catalog[shared_service_name] }}"
+    shared_service_env_config: "{{ shared_service_catalog[shared_service_name].environments[shared_service_env] }}"
+    shared_service_project_dir: "{{ shared_service_base_dir }}/{{ shared_service_name }}/{{ shared_service_env }}"
+
+- name: Ensure shared service project directory exists
+  file:
+    path: "{{ shared_service_project_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Ensure shared service Docker network exists
+  community.docker.docker_network:
+    name: "{{ shared_service_env_config.network }}"
+    state: present
+
+- name: Copy shared service compose file
+  copy:
+    src: "{{ shared_service_config.compose_file }}"
+    dest: "{{ shared_service_project_dir }}/docker-compose.yml"
+    mode: "0644"
+
+- name: Render shared service environment file
+  template:
+    src: ../templates/shared-service.env.j2
+    dest: "{{ shared_service_project_dir }}/.env"
+    mode: "0600"
+    owner: root
+    group: root
+
+- name: Deploy shared service
+  community.docker.docker_compose_v2:
+    project_src: "{{ shared_service_project_dir }}"
+    project_name: "shared_{{ shared_service_name }}_{{ shared_service_env }}"
+    files:
+      - docker-compose.yml
+    env_files:
+      - .env
+    state: present
+    pull: always
+    recreate: auto
+    remove_orphans: true
+    wait: true
+    wait_timeout: 300
+
+- name: Provision Postgres app databases
+  include_tasks: provision-postgres-database.yml
+  loop: "{{ apps | default([]) }}"
+  loop_control:
+    loop_var: postgres_app
+    label: "{{ postgres_app.name }}:{{ shared_service_env }}"
+  vars:
+    postgres_app_env: "{{ postgres_app.environments[shared_service_env] }}"
+    postgres_secret_names: "{{ shared_service_subscription.environments[shared_service_env].secret_names | default(shared_service_env_config.secret_names | default({})) }}"
+  when:
+    - shared_service_name == 'postgres'
+    - shared_service_subscription.environments is mapping
+    - shared_service_env in shared_service_subscription.environments
+    - postgres_app.environments is defined
+    - shared_service_env in postgres_app.environments
+    - postgres_app.environments[shared_service_env].postgres_database is defined
