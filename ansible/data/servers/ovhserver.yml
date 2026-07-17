@@ -40,11 +40,13 @@ apps:
       prod:
         domain: api.stmarysacademy.sc.ke
         port: 8000
-        rabbitmq_namespace: zanaka-backend
+        postgres_database: zanaka
+        rabbitmq_namespace: zanaka
       stage:
         domain: stage-api.stmarysacademy.sc.ke
         port: 8001
-        rabbitmq_namespace: zanaka-backend
+        postgres_database: zanaka
+        rabbitmq_namespace: zanaka
 
   - name: zanaka-ui
     repo: stevendegwa/zanaka-ui
@@ -62,11 +64,13 @@ apps:
       prod:
         domain: api.rentwaveafrica.co.ke
         port: 8002
-        rabbitmq_namespace: rentwave-backend
+        postgres_database: rentwave
+        rabbitmq_namespace: rentwave
       stage:
         domain: stage-api.rentwaveafrica.co.ke
         port: 8003
-        rabbitmq_namespace: rentwave-backend
+        postgres_database: rentwave
+        rabbitmq_namespace: rentwave
 
   - name: rentwave-ui
     repo: rentwave/mvpm-ui
@@ -84,11 +88,13 @@ apps:
       prod:
         domain: utilities.rentwaveafrica.co.ke
         port: 8005
-        rabbitmq_namespace: rentwave-utilities-backend
+        postgres_database: rentwave-utilities
+        rabbitmq_namespace: rentwave-utilities
       stage:
         domain: stage-utilities.rentwaveafrica.co.ke
         port: 8006
-        rabbitmq_namespace: rentwave-utilities-backend
+        postgres_database: rentwave-utilities
+        rabbitmq_namespace: rentwave-utilities
 
   - name: st-marys-academy-website
     repo: stevendegwa/st-marys-academy-website
@@ -103,11 +109,13 @@ apps:
       prod:
         domain: api.lipasync.com
         port: 8007
-        rabbitmq_namespace: lipasync-backend
+        postgres_database: lipasync
+        rabbitmq_namespace: lipasync
       stage:
         domain: stage-api.lipasync.com
         port: 8008
-        rabbitmq_namespace: lipasync-backend
+        postgres_database: lipasync
+        rabbitmq_namespace: lipasync
 
   - name: lipasync-ui
     repo: jkmutua/lipasync-ui
@@ -125,11 +133,13 @@ apps:
       prod:
         domain: api.quidpath.com
         port: 8004
-        rabbitmq_namespace: quidpath-backend
+        postgres_database: quidpath
+        rabbitmq_namespace: quidpath
       stage:
         domain: stage-api.quidpath.com
         port: 8011
-        rabbitmq_namespace: quidpath-backend
+        postgres_database: quidpath
+        rabbitmq_namespace: quidpath
 
   - name: quidpath-ui
     repo: quidpath/v1-ui
@@ -147,11 +157,13 @@ apps:
       prod:
         domain: qb.lipasync.com
         port: 8012
-        rabbitmq_namespace: qb-backend
+        postgres_database: qb
+        rabbitmq_namespace: qb
       stage:
         domain: stage-qb.lipasync.com
         port: 8013
-        rabbitmq_namespace: qb-backend
+        postgres_database: qb
+        rabbitmq_namespace: qb
 
   - name: qb-ui
     repo: sosiru/qb-ui
@@ -183,10 +195,12 @@ apps:
       prod:
         domain: notify.lipasync.com
         port: 8016
+        postgres_database: notify
         rabbitmq_namespace: notification-bus
       stage:
         domain: stage-notify.lipasync.com
         port: 8017
+        postgres_database: notify
         rabbitmq_namespace: notification-bus
 
 extra_domains: []
