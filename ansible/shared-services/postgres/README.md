@@ -40,6 +40,10 @@ networks:
 services:
   api:
     image: ${IMAGE_TAG}
+    labels:
+      observability.app: payments
+      observability.component: api
+      observability.environment: ${SHARED_ENV}
     environment:
       <<: *app-env
     ports:
@@ -49,10 +53,17 @@ services:
   worker:
     image: ${IMAGE_TAG}
     command: celery -A app worker -l INFO
+    labels:
+      observability.app: payments
+      observability.component: worker
+      observability.environment: ${SHARED_ENV}
     environment:
       <<: *app-env
     restart: always
 ```
+
+The `observability.*` labels are optional, but they make logs easier to filter
+in Grafana. The deploy workflow provides `SHARED_ENV` as `prod` or `stage`.
 
 For apps with RabbitMQ, also read `CELERY_BROKER_URL` from the deploy-provided
 environment. The deploy workflow sets `SHARED_NETWORK` to `shared-prod` or

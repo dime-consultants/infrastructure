@@ -10,7 +10,7 @@
     - name: Resolve app deployment config
       set_fact:
         deployment_app: "{{ item }}"
-        deployment_app_env: "{{ item.environments[env] }}"
+        deployment_app_env: "{{ item | combine(item.environments[env], recursive=True) }}"
       loop: "{{ apps | default([]) }}"
       when:
         - app_repo is defined

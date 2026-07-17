@@ -110,8 +110,9 @@ jobs:
 
       - name: Create .env file
         run: |
-          # Start with IMAGE_TAG (not a secret)
+          # Start with deployment metadata (not secrets)
           echo "IMAGE_TAG=${{ github.event.client_payload.image_tag }}" > /tmp/.env
+          echo "SHARED_ENV=${{ github.event.client_payload.env }}" >> /tmp/.env
 
           # Append all secrets from payload
           echo '${{ toJson(github.event.client_payload.env_secrets) }}' | \
@@ -189,11 +190,36 @@ jobs:
               for app in data.get("apps", []):
                   if app.get("repo", "").lower() != repo.lower():
                       continue
-                  app_env = (app.get("environments") or {}).get(env_name, {})
+                  app_env = {
+                      key: value
+                      for key, value in app.items()
+                      if key != "environments"
+                  }
+                  app_env.update((app.get("environments") or {}).get(env_name, {}))
                   rabbitmq_namespace = app_env.get("rabbitmq_namespace")
                   postgres_database = app_env.get("postgres_database")
+                  app_port = app_env.get("port")
+                  port_env = app_env.get("port_env")
 
                   env_values = {}
+
+                  if isinstance(port_env, str):
+                      if not app_port:
+                          raise SystemExit(
+                              f"{target_server} {app.get('name')}:{env_name} "
+                              f"sets port_env={port_env} but has no port"
+                          )
+                      env_values[port_env] = str(app_port)
+                  elif isinstance(port_env, dict):
+                      for env_key, env_value in port_env.items():
+                          env_values[str(env_key)] = str(env_value)
+                  elif port_env is not None:
+                      raise SystemExit(
+                          f"{target_server} {app.get('name')}:{env_name} "
+                          "port_env must be a string or mapping"
+                      )
+                  elif app_port:
+                      env_values["API_PORT"] = str(app_port)
 
                   if postgres_database:
                       subscribed_environment(data, "postgres", env_name)

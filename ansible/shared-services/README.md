@@ -50,6 +50,10 @@ networks:
 services:
   api:
     image: ${IMAGE_TAG}
+    labels:
+      observability.app: payments
+      observability.component: api
+      observability.environment: ${SHARED_ENV}
     environment:
       DATABASE_DB: ${DATABASE_DB}
       DATABASE_USER: ${DATABASE_USER}
@@ -58,6 +62,9 @@ services:
       DATABASE_PORT: ${DATABASE_PORT}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL}
 ```
+
+The `observability.*` labels are optional, but they make logs easier to filter
+in Grafana. The deploy workflow provides `SHARED_ENV` as `prod` or `stage`.
 
 If an app needs multiple networks, keep the shared network explicit and attach
 every service that connects to PostgreSQL, RabbitMQ, or another shared service:
@@ -72,6 +79,10 @@ networks:
 services:
   api:
     image: ${IMAGE_TAG}
+    labels:
+      observability.app: payments
+      observability.component: api
+      observability.environment: ${SHARED_ENV}
     environment:
       DATABASE_DB: ${DATABASE_DB}
       DATABASE_USER: ${DATABASE_USER}
@@ -85,6 +96,10 @@ services:
 
   worker:
     image: ${IMAGE_TAG}
+    labels:
+      observability.app: payments
+      observability.component: worker
+      observability.environment: ${SHARED_ENV}
     environment:
       DATABASE_DB: ${DATABASE_DB}
       DATABASE_USER: ${DATABASE_USER}
@@ -132,17 +147,62 @@ environment:
 apps:
   - name: payments
     repo: stevendegwa/payments
+    port_env: API_PORT
+    postgres_database: payments
+    rabbitmq_namespace: payments
     environments:
       prod:
         domain: payments.example.com
         port: 8014
-        postgres_database: payments
-        rabbitmq_namespace: payments
       stage:
         domain: stage-payments.example.com
         port: 8015
-        postgres_database: payments
-        rabbitmq_namespace: payments
+        port_env:
+          API_PORT: 8015
+          METRICS_PORT: 9015
+```
+
+`postgres_database`, `rabbitmq_namespace`, and `port_env` can be declared once
+on the app when they are the same for every environment. Environment values
+override app-level values when they differ. `port` is environment-specific
+because production and stage usually listen on different host ports.
+
+By default, app deploy exports `port` as `API_PORT`. Use `port_env` to choose a
+different env var name, or use a mapping when the compose file needs multiple
+named ports.
+
+For example, this app compose needs both `API_PORT` and `METRICS_PORT`:
+
+```yaml
+services:
+  api:
+    image: ${IMAGE_TAG}
+    ports:
+      - "${API_PORT}:8000"
+      - "${METRICS_PORT}:9100"
+```
+
+Declare those names in the matching environment:
+
+```yaml
+apps:
+  - name: payments
+    repo: stevendegwa/payments
+    port_env: API_PORT
+    environments:
+      prod:
+        domain: payments.example.com
+        port: 8014
+        port_env:
+          API_PORT: 8014
+          METRICS_PORT: 9014
+```
+
+For `prod`, app deploy writes:
+
+```env
+API_PORT=8014
+METRICS_PORT=9014
 ```
 
 Base setup and the shared-services playbook create every declared

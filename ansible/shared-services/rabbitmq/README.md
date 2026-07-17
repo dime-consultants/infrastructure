@@ -28,10 +28,17 @@ services:
   worker:
     image: ${IMAGE_TAG}
     command: celery -A app worker -l INFO
+    labels:
+      observability.app: payments
+      observability.component: worker
+      observability.environment: ${SHARED_ENV}
     environment:
       CELERY_BROKER_URL: ${CELERY_BROKER_URL}
     restart: always
 ```
+
+The `observability.*` labels are optional, but they make logs easier to filter
+in Grafana. The deploy workflow provides `SHARED_ENV` as `prod` or `stage`.
 
 If an app needs multiple networks, keep the shared network explicit and attach
 every service that connects to RabbitMQ:
@@ -47,6 +54,10 @@ services:
   worker:
     image: ${IMAGE_TAG}
     command: celery -A app worker -l INFO
+    labels:
+      observability.app: payments
+      observability.component: worker
+      observability.environment: ${SHARED_ENV}
     environment:
       CELERY_BROKER_URL: ${CELERY_BROKER_URL}
     networks:

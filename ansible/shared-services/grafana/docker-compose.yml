@@ -10,10 +10,37 @@ services:
       - "127.0.0.1:${GRAFANA_PORT}:3000"
     volumes:
       - grafana_data:/var/lib/grafana
+      - ./provisioning/datasources:/etc/grafana/provisioning/datasources:ro
     networks:
       default:
         aliases:
           - ${SERVICE_HOST}
+
+  loki:
+    image: grafana/loki:3.1.1
+    restart: unless-stopped
+    command: -config.file=/etc/loki/config.yml
+    volumes:
+      - ./loki-config.yml:/etc/loki/config.yml:ro
+      - loki_data:/loki
+    networks:
+      default:
+        aliases:
+          - loki
+
+  promtail:
+    image: grafana/promtail:3.1.1
+    restart: unless-stopped
+    command: -config.file=/etc/promtail/config.yml
+    volumes:
+      - ./promtail-config.yml:/etc/promtail/config.yml:ro
+      - promtail_data:/var/lib/promtail
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      default:
+        aliases:
+          - promtail
 
 networks:
   default:
@@ -23,3 +50,7 @@ networks:
 volumes:
   grafana_data:
     name: ${SERVICE_VOLUME}
+  loki_data:
+    name: ${LOKI_VOLUME}
+  promtail_data:
+    name: ${PROMTAIL_VOLUME}

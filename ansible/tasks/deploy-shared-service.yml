@@ -31,6 +31,28 @@
     dest: "{{ shared_service_project_dir }}/docker-compose.yml"
     mode: "0644"
 
+- name: Copy Grafana Promtail config
+  copy:
+    src: ../shared-services/grafana/promtail-config.yml
+    dest: "{{ shared_service_project_dir }}/promtail-config.yml"
+    mode: "0644"
+  when: shared_service_name == 'grafana'
+
+- name: Copy Grafana Loki config
+  copy:
+    src: ../shared-services/grafana/loki-config.yml
+    dest: "{{ shared_service_project_dir }}/loki-config.yml"
+    mode: "0644"
+  when: shared_service_name == 'grafana'
+
+- name: Copy Grafana provisioning files
+  copy:
+    src: ../shared-services/grafana/provisioning/
+    dest: "{{ shared_service_project_dir }}/provisioning/"
+    mode: "0644"
+    directory_mode: "0755"
+  when: shared_service_name == 'grafana'
+
 - name: Render shared service environment file
   template:
     src: ../templates/shared-service.env.j2

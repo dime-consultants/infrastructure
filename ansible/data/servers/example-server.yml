@@ -59,20 +59,23 @@ shared_services:
 apps:
   - name: example-api
     repo: example-org/example-api
+    port_env: API_PORT
+    postgres_database: example_api
+    rabbitmq_namespace: example-api
     environments:
       prod:
         domain: api.example.com
         port: 8000
-        postgres_database: example_api
-        rabbitmq_namespace: example-api
       stage:
         domain: stage-api.example.com
         port: 8001
-        postgres_database: example_api
-        rabbitmq_namespace: example-api
+        port_env:
+          API_PORT: 8001
+          METRICS_PORT: 9101
 
   - name: example-ui
     repo: example-org/example-ui
+    port_env: API_PORT
     environments:
       prod:
         domain: example.com

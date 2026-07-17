@@ -13,7 +13,7 @@
   loop_control:
     loop_var: shared_dependency_app_env_item
     label: "{{ shared_dependency_app.name }}:{{ shared_dependency_app_env_item.key }}"
-  when: shared_dependency_app_env_item.value.postgres_database is defined
+  when: (shared_dependency_app | combine(shared_dependency_app_env_item.value, recursive=True)).postgres_database is defined
 
 - name: Provision Postgres database for app environment
   include_tasks: provision-postgres-database.yml
@@ -26,9 +26,9 @@
     shared_service_env: "{{ shared_dependency_app_env_item.key }}"
     shared_service_env_config: "{{ shared_service_catalog.postgres.environments[shared_dependency_app_env_item.key] }}"
     postgres_app: "{{ shared_dependency_app }}"
-    postgres_app_env: "{{ shared_dependency_app_env_item.value }}"
+    postgres_app_env: "{{ shared_dependency_app | combine(shared_dependency_app_env_item.value, recursive=True) }}"
     postgres_secret_names: "{{ app_postgres_subscription.environments[shared_dependency_app_env_item.key].secret_names | default(shared_service_catalog.postgres.environments[shared_dependency_app_env_item.key].secret_names | default({})) }}"
-  when: shared_dependency_app_env_item.value.postgres_database is defined
+  when: (shared_dependency_app | combine(shared_dependency_app_env_item.value, recursive=True)).postgres_database is defined
 
 - name: Validate RabbitMQ subscription for app environment
   assert:
@@ -44,7 +44,7 @@
   loop_control:
     loop_var: shared_dependency_app_env_item
     label: "{{ shared_dependency_app.name }}:{{ shared_dependency_app_env_item.key }}"
-  when: shared_dependency_app_env_item.value.rabbitmq_namespace is defined
+  when: (shared_dependency_app | combine(shared_dependency_app_env_item.value, recursive=True)).rabbitmq_namespace is defined
 
 - name: Provision RabbitMQ namespace for app environment
   include_tasks: provision-rabbitmq-namespace.yml
@@ -56,7 +56,6 @@
     shared_service_name: rabbitmq
     shared_service_env: "{{ shared_dependency_app_env_item.key }}"
     rabbitmq_app: "{{ shared_dependency_app }}"
-    rabbitmq_app_env: "{{ shared_dependency_app_env_item.value }}"
+    rabbitmq_app_env: "{{ shared_dependency_app | combine(shared_dependency_app_env_item.value, recursive=True) }}"
     rabbitmq_secret_names: "{{ app_rabbitmq_subscription.environments[shared_dependency_app_env_item.key].secret_names | default(shared_service_catalog.rabbitmq.environments[shared_dependency_app_env_item.key].secret_names | default({})) }}"
-  when: shared_dependency_app_env_item.value.rabbitmq_namespace is defined
-
+  when: (shared_dependency_app | combine(shared_dependency_app_env_item.value, recursive=True)).rabbitmq_namespace is defined

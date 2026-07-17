@@ -96,6 +96,7 @@ jobs:
         run: |
           cat << EOF > /tmp/.env
           IMAGE_TAG=${{ inputs.previous_tag }}
+          SHARED_ENV=${{ inputs.env }}
           NODE_ENV=${{ inputs.env == 'prod' && 'production' || 'staging' }}
           EOF
 
