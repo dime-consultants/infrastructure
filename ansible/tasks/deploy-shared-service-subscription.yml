@@ -12,7 +12,8 @@
   include_tasks: deploy-shared-service.yml
   loop: "{{ shared_service_environment_names }}"
   loop_control:
-    label: "{{ shared_service_subscription.name }}:{{ item }}"
+    loop_var: shared_service_environment_name
+    label: "{{ shared_service_subscription.name }}:{{ shared_service_environment_name }}"
   vars:
     shared_service_name: "{{ shared_service_subscription.name }}"
-    shared_service_env: "{{ item }}"
+    shared_service_env: "{{ shared_service_environment_name }}"

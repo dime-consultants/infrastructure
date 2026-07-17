@@ -11,6 +11,7 @@
       include_tasks: ../tasks/deploy-shared-service-subscription.yml
       loop: "{{ shared_services | default([]) }}"
       loop_control:
-        label: "{{ item.name }}"
+        loop_var: shared_service_subscription_item
+        label: "{{ shared_service_subscription_item.name }}"
       vars:
-        shared_service_subscription: "{{ item }}"
+        shared_service_subscription: "{{ shared_service_subscription_item }}"
