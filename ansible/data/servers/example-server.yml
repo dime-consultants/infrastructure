@@ -64,12 +64,12 @@ apps:
         domain: api.example.com
         port: 8000
         postgres_database: example_api
-        celery_namespace: example-api
+        rabbitmq_namespace: example-api
       stage:
         domain: stage-api.example.com
         port: 8001
         postgres_database: example_api
-        celery_namespace: example-api
+        rabbitmq_namespace: example-api
 
   - name: example-ui
     repo: example-org/example-ui

@@ -132,6 +132,7 @@ jobs:
           python3 <<'PY'
           import os
           import yaml
+          from urllib.parse import quote
 
           repo = "${{ github.event.client_payload.app_repo }}"
           env_name = "${{ github.event.client_payload.env }}"
@@ -189,7 +190,7 @@ jobs:
                   if app.get("repo", "").lower() != repo.lower():
                       continue
                   app_env = (app.get("environments") or {}).get(env_name, {})
-                  namespace = app_env.get("celery_namespace")
+                  rabbitmq_namespace = app_env.get("rabbitmq_namespace")
                   postgres_database = app_env.get("postgres_database")
 
                   env_values = {}
@@ -215,7 +216,7 @@ jobs:
                           "SHARED_NETWORK": postgres_config.get("network", f"shared-{env_name}"),
                       })
 
-                  if namespace:
+                  if rabbitmq_namespace:
                       subscribed_environment(data, "rabbitmq", env_name)
                       rabbitmq_config = service_env_config("rabbitmq", env_name)
                       rabbitmq_secret_names = rabbitmq_config.get("secret_names") or {}
@@ -231,12 +232,13 @@ jobs:
                       )
                       rabbitmq_host = rabbitmq_config.get("service_host", "rabbitmq")
                       env_values.update({
-                          "CELERY_NAMESPACE": namespace,
+                          "RABBITMQ_NAMESPACE": rabbitmq_namespace,
                           "RABBITMQ_DEFAULT_USER": rabbitmq_user,
                           "RABBITMQ_DEFAULT_PASS": rabbitmq_password,
                           "CELERY_BROKER_URL": (
                               f"amqp://{rabbitmq_user}:{rabbitmq_password}"
-                              f"@{rabbitmq_host}:5672//"
+                              f"@{rabbitmq_host}:5672/"
+                              f"{quote(rabbitmq_namespace, safe='')}"
                           ),
                           "SHARED_NETWORK": rabbitmq_config.get(
                               "network",

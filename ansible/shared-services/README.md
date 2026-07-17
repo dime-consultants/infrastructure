@@ -89,13 +89,15 @@ apps:
         domain: payments.example.com
         port: 8014
         postgres_database: payments
-        celery_namespace: payments
+        rabbitmq_namespace: payments
       stage:
         domain: stage-payments.example.com
         port: 8015
         postgres_database: payments
-        celery_namespace: payments
+        rabbitmq_namespace: payments
 ```
 
-The deploy workflow appends `DATABASE_DB` and `CELERY_NAMESPACE` from this app
-environment metadata to the app `.env` before rendering Docker Compose.
+The deploy workflow appends `DATABASE_DB` when `postgres_database` is present
+and RabbitMQ credentials / `CELERY_BROKER_URL` when `rabbitmq_namespace` is
+present. RabbitMQ namespaces are provisioned as vhosts on the shared RabbitMQ
+instance. Queue names remain owned by the app compose/settings.

@@ -40,11 +40,11 @@ apps:
       prod:
         domain: api.stmarysacademy.sc.ke
         port: 8000
-        celery_namespace: zanaka-backend
+        rabbitmq_namespace: zanaka-backend
       stage:
         domain: stage-api.stmarysacademy.sc.ke
         port: 8001
-        celery_namespace: zanaka-backend
+        rabbitmq_namespace: zanaka-backend
 
   - name: zanaka-ui
     repo: stevendegwa/zanaka-ui
@@ -62,11 +62,11 @@ apps:
       prod:
         domain: api.rentwaveafrica.co.ke
         port: 8002
-        celery_namespace: rentwave-backend
+        rabbitmq_namespace: rentwave-backend
       stage:
         domain: stage-api.rentwaveafrica.co.ke
         port: 8003
-        celery_namespace: rentwave-backend
+        rabbitmq_namespace: rentwave-backend
 
   - name: rentwave-ui
     repo: rentwave/mvpm-ui
@@ -84,11 +84,11 @@ apps:
       prod:
         domain: utilities.rentwaveafrica.co.ke
         port: 8005
-        celery_namespace: rentwave-utilities-backend
+        rabbitmq_namespace: rentwave-utilities-backend
       stage:
         domain: stage-utilities.rentwaveafrica.co.ke
         port: 8006
-        celery_namespace: rentwave-utilities-backend
+        rabbitmq_namespace: rentwave-utilities-backend
 
   - name: st-marys-academy-website
     repo: stevendegwa/st-marys-academy-website
@@ -103,11 +103,11 @@ apps:
       prod:
         domain: api.lipasync.com
         port: 8007
-        celery_namespace: lipasync-backend
+        rabbitmq_namespace: lipasync-backend
       stage:
         domain: stage-api.lipasync.com
         port: 8008
-        celery_namespace: lipasync-backend
+        rabbitmq_namespace: lipasync-backend
 
   - name: lipasync-ui
     repo: jkmutua/lipasync-ui
@@ -125,11 +125,11 @@ apps:
       prod:
         domain: api.quidpath.com
         port: 8004
-        celery_namespace: quidpath-backend
+        rabbitmq_namespace: quidpath-backend
       stage:
         domain: stage-api.quidpath.com
         port: 8011
-        celery_namespace: quidpath-backend
+        rabbitmq_namespace: quidpath-backend
 
   - name: quidpath-ui
     repo: quidpath/v1-ui
@@ -147,11 +147,11 @@ apps:
       prod:
         domain: qb.lipasync.com
         port: 8012
-        celery_namespace: qb-backend
+        rabbitmq_namespace: qb-backend
       stage:
         domain: stage-qb.lipasync.com
         port: 8013
-        celery_namespace: qb-backend
+        rabbitmq_namespace: qb-backend
 
   - name: qb-ui
     repo: sosiru/qb-ui
@@ -170,12 +170,12 @@ apps:
         domain: payments.lipasync.com
         port: 8014
         postgres_database: payments
-        celery_namespace: payments
+        rabbitmq_namespace: payments
       stage:
         domain: stage-payments.lipasync.com
         port: 8015
         postgres_database: payments
-        celery_namespace: payments
+        rabbitmq_namespace: payments
 
   - name: notification-bus
     repo: stevendegwa/notification-bus
@@ -183,10 +183,10 @@ apps:
       prod:
         domain: notify.lipasync.com
         port: 8016
-        celery_namespace: notification-bus
+        rabbitmq_namespace: notification-bus
       stage:
         domain: stage-notify.lipasync.com
         port: 8017
-        celery_namespace: notification-bus
+        rabbitmq_namespace: notification-bus
 
 extra_domains: []

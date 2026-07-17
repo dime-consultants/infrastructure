@@ -1,0 +1,30 @@
+---
+- name: Resolve RabbitMQ namespace credentials
+  set_fact:
+    rabbitmq_namespace: "{{ rabbitmq_app_env.rabbitmq_namespace }}"
+    rabbitmq_username: "{{ lookup('env', rabbitmq_secret_names.username) }}"
+    rabbitmq_password: "{{ lookup('env', rabbitmq_secret_names.password) }}"
+
+- name: Validate RabbitMQ namespace credentials
+  assert:
+    that:
+      - rabbitmq_namespace | length > 0
+      - rabbitmq_username | length > 0
+      - rabbitmq_password | length > 0
+    fail_msg: "Missing RabbitMQ config or GitHub Secrets for {{ rabbitmq_app.name }}:{{ shared_service_env }}."
+
+- name: Provision RabbitMQ namespace
+  ansible.builtin.shell: |
+    docker exec \
+      -e RABBITMQ_NAMESPACE \
+      -e RABBITMQ_USERNAME \
+      shared_{{ shared_service_name }}_{{ shared_service_env }}-rabbitmq-1 \
+      sh -s <<'SH'
+    rabbitmqctl add_vhost "$RABBITMQ_NAMESPACE" || true
+    rabbitmqctl set_permissions -p "$RABBITMQ_NAMESPACE" "$RABBITMQ_USERNAME" ".*" ".*" ".*"
+    SH
+  environment:
+    RABBITMQ_NAMESPACE: "{{ rabbitmq_namespace }}"
+    RABBITMQ_USERNAME: "{{ rabbitmq_username }}"
+    RABBITMQ_PASSWORD: "{{ rabbitmq_password }}"
+  changed_when: true
