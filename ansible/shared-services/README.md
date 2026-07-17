@@ -32,20 +32,62 @@ If the default proxy port from `ansible/data/shared-services.yml` is not right
 for a domain, set `proxy_port` beside `domain`.
 
 Applications should not include shared service containers in their own compose
-files. Instead, attach application services to the matching external network:
+files. Instead, make the compose default network point at the matching external
+shared network:
 
 ```yaml
+networks:
+  default:
+    name: ${SHARED_NETWORK}
+    external: true
+
 services:
   api:
+    image: ${IMAGE_TAG}
+    environment:
+      DATABASE_DB: ${DATABASE_DB}
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      DATABASE_HOST: ${DATABASE_HOST}
+      DATABASE_PORT: ${DATABASE_PORT}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL}
+```
+
+If an app needs multiple networks, keep the shared network explicit and attach
+every service that connects to PostgreSQL, RabbitMQ, or another shared service:
+
+```yaml
+networks:
+  app:
+  shared:
+    name: ${SHARED_NETWORK}
+    external: true
+
+services:
+  api:
+    image: ${IMAGE_TAG}
+    environment:
+      DATABASE_DB: ${DATABASE_DB}
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      DATABASE_HOST: ${DATABASE_HOST}
+      DATABASE_PORT: ${DATABASE_PORT}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL}
     networks:
       - app
       - shared
 
-networks:
-  app:
-  shared:
-    name: shared-prod # use shared-stage for stage deployments
-    external: true
+  worker:
+    image: ${IMAGE_TAG}
+    environment:
+      DATABASE_DB: ${DATABASE_DB}
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      DATABASE_HOST: ${DATABASE_HOST}
+      DATABASE_PORT: ${DATABASE_PORT}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL}
+    networks:
+      - shared
 ```
 
 Stable internal hostnames:
