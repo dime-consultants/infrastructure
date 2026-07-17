@@ -41,19 +41,70 @@
       -e APP_DB_NAME \
       "$POSTGRES_CONTAINER" \
       sh -s <<'SH'
+    set -eu
+
+    APP_DB_SQL=$(printf "%s" "$APP_DB_NAME" | sed "s/'/''/g")
+    DB_EXISTS="$(
+      psql -v ON_ERROR_STOP=1 \
+        -U "$POSTGRES_USER" \
+        -d "$POSTGRES_DB" \
+        -tAc "SELECT 1 FROM pg_database WHERE datname = '$APP_DB_SQL'"
+    )"
+
+    if [ "$DB_EXISTS" != "1" ]; then
+      createdb \
+        -U "$POSTGRES_USER" \
+        -O "$POSTGRES_USER" \
+        "$APP_DB_NAME"
+      echo "created database $APP_DB_NAME"
+    else
+      echo "database $APP_DB_NAME already exists"
+    fi
+
     psql -v ON_ERROR_STOP=1 \
       -U "$POSTGRES_USER" \
-      -d "$POSTGRES_DB" \
-      -v app_db="$APP_DB_NAME" \
-      -v app_user="$POSTGRES_USER" <<'SQL'
-    SELECT format('CREATE DATABASE %I OWNER %I', :'app_db', :'app_user')
-    WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'app_db')\gexec
-    SELECT format('GRANT ALL PRIVILEGES ON DATABASE %I TO %I', :'app_db', :'app_user')\gexec
-    SQL
+      -d "$APP_DB_NAME" \
+      -c "GRANT ALL ON SCHEMA public TO \"$POSTGRES_USER\";"
     SH
   environment:
     PGPASSWORD: "{{ postgres_database_password }}"
     POSTGRES_USER: "{{ postgres_database_user }}"
     POSTGRES_DB: "{{ postgres_admin_database }}"
     APP_DB_NAME: "{{ postgres_database_name }}"
+  register: postgres_database_provision
   changed_when: true
+
+- name: Verify Postgres database exists
+  ansible.builtin.shell: |
+    set -eu
+
+    POSTGRES_CONTAINER="$(
+      docker compose \
+        --project-directory "{{ postgres_shared_project_dir }}" \
+        -p "{{ postgres_shared_project_name }}" \
+        -f "{{ postgres_shared_project_dir }}/docker-compose.yml" \
+        ps -q postgres
+    )"
+
+    docker exec \
+      -e PGPASSWORD \
+      -e POSTGRES_USER \
+      -e POSTGRES_DB \
+      -e APP_DB_NAME \
+      "$POSTGRES_CONTAINER" \
+      sh -s <<'SH'
+    set -eu
+    APP_DB_SQL=$(printf "%s" "$APP_DB_NAME" | sed "s/'/''/g")
+    psql -v ON_ERROR_STOP=1 \
+      -U "$POSTGRES_USER" \
+      -d "$POSTGRES_DB" \
+      -tAc "SELECT 1 FROM pg_database WHERE datname = '$APP_DB_SQL'"
+    SH
+  environment:
+    PGPASSWORD: "{{ postgres_database_password }}"
+    POSTGRES_USER: "{{ postgres_database_user }}"
+    POSTGRES_DB: "{{ postgres_admin_database }}"
+    APP_DB_NAME: "{{ postgres_database_name }}"
+  register: postgres_database_verify
+  changed_when: false
+  failed_when: postgres_database_verify.stdout | trim != "1"
