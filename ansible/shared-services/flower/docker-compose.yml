@@ -1,0 +1,20 @@
+services:
+  flower:
+    image: mher/flower:2.0.1
+    restart: unless-stopped
+    command:
+      - celery
+      - --broker=${CELERY_BROKER_URL}
+      - flower
+      - --port=5555
+    ports:
+      - "127.0.0.1:${FLOWER_PORT}:5555"
+    networks:
+      default:
+        aliases:
+          - ${SERVICE_HOST}
+
+networks:
+  default:
+    name: ${SHARED_NETWORK}
+    external: true

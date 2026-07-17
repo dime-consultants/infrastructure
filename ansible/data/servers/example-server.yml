@@ -1,0 +1,86 @@
+# Template only. This file is ignored by inventory and GitHub Actions because
+# enabled is false.
+enabled: false
+
+server_name: example-server
+ssh_secret_name: EXAMPLE_SERVER_SSH_KEY
+ssh_user_secret_name: EXAMPLE_SERVER_SSH_USER
+public_ip_secret_name: EXAMPLE_SERVER_PUBLIC_IP
+
+# Open host ports directly through UFW when something must be reachable without
+# Nginx. Most HTTP/S traffic should use app domains, shared service domains, or
+# extra_domains instead.
+firewall_extra_ports:
+  - 2222
+
+# Shared services are deployed once per environment and can optionally expose a
+# public domain through Nginx. Runtime secret names live beside the shared
+# service environment that uses them.
+shared_services:
+  - name: postgres
+    environments:
+      prod: {}
+      stage: {}
+
+  - name: rabbitmq
+    environments:
+      prod:
+        domain: rabbitmq.example.com
+        basic_auth: true
+      stage:
+        domain: stage-rabbitmq.example.com
+        basic_auth: true
+
+  - name: portainer
+    environments:
+      prod:
+        domain: portainer.example.com
+      stage: {}
+
+  - name: grafana
+    environments:
+      prod:
+        domain: grafana.example.com
+      stage:
+        domain: stage-grafana.example.com
+        proxy_port: 3100
+
+  - name: flower
+    environments:
+      prod:
+        domain: flower.example.com
+        basic_auth: true
+      stage:
+        domain: stage-flower.example.com
+        basic_auth: true
+
+# Apps are deployed by repository_dispatch when app_repo matches one of these
+# repo values. App-specific database names live with the app environment.
+apps:
+  - name: example-api
+    repo: example-org/example-api
+    environments:
+      prod:
+        domain: api.example.com
+        port: 8000
+        postgres_database: example_api
+        celery_namespace: example-api
+      stage:
+        domain: stage-api.example.com
+        port: 8001
+        postgres_database: example_api
+        celery_namespace: example-api
+
+  - name: example-ui
+    repo: example-org/example-ui
+    environments:
+      prod:
+        domain: example.com
+        port: 3000
+
+# Extra domains are for non-shared-service and non-app proxies that still need
+# Nginx/certbot management.
+extra_domains:
+  - domain: custom-tool.example.com
+    proxy_port: 9090
+    basic_auth: true

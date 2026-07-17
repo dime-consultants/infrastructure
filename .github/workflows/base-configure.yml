@@ -31,12 +31,18 @@ jobs:
                   path = os.path.join(servers_dir, filename)
                   with open(path) as f:
                       data = yaml.safe_load(f) or {}
+                      if data.get("enabled") is False:
+                          continue
                       server_name = data.get("server_name")
                       ssh_secret = data.get("ssh_secret_name")
-                      if server_name and ssh_secret:
+                      public_ip_secret = data.get("public_ip_secret_name")
+                      ssh_user_secret = data.get("ssh_user_secret_name")
+                      if server_name and ssh_secret and public_ip_secret and ssh_user_secret:
                           matrix_entries.append({
                               "server": server_name,
-                              "secret_name": ssh_secret
+                              "secret_name": ssh_secret,
+                              "public_ip_secret_name": public_ip_secret,
+                              "ssh_user_secret_name": ssh_user_secret
                           })
 
           matrix_json = json.dumps({"include": matrix_entries})
@@ -62,14 +68,32 @@ jobs:
           python-version: '3.11'
 
       - name: Install Ansible
-        run: pip install ansible
+        run: |
+          pip install ansible
+          ansible-galaxy collection install 'community.docker:>3.0.0'
+          ansible-galaxy collection install community.general
 
       - name: Configure server
         env:
             ANSIBLE_HOST_KEY_CHECKING: False
             SSH_PRIVATE_KEY: ${{ secrets[format('{0}', matrix.secret_name)] }}
+            TARGET_SERVER: ${{ matrix.server }}
+            TARGET_PUBLIC_IP: ${{ secrets[format('{0}', matrix.public_ip_secret_name)] }}
+            TARGET_SSH_USER: ${{ secrets[format('{0}', matrix.ssh_user_secret_name)] }}
             BASIC_AUTH_USERNAME: ${{ secrets.BASIC_AUTH_USERNAME }}
             BASIC_AUTH_PASSWORD: ${{ secrets.BASIC_AUTH_PASSWORD }}
+            POSTGRES_PROD_USER: ${{ secrets.POSTGRES_PROD_USER }}
+            POSTGRES_PROD_PASSWORD: ${{ secrets.POSTGRES_PROD_PASSWORD }}
+            POSTGRES_STAGE_USER: ${{ secrets.POSTGRES_STAGE_USER }}
+            POSTGRES_STAGE_PASSWORD: ${{ secrets.POSTGRES_STAGE_PASSWORD }}
+            RABBITMQ_PROD_USER: ${{ secrets.RABBITMQ_PROD_USER }}
+            RABBITMQ_PROD_PASSWORD: ${{ secrets.RABBITMQ_PROD_PASSWORD }}
+            RABBITMQ_STAGE_USER: ${{ secrets.RABBITMQ_STAGE_USER }}
+            RABBITMQ_STAGE_PASSWORD: ${{ secrets.RABBITMQ_STAGE_PASSWORD }}
+            GRAFANA_PROD_USER: ${{ secrets.GRAFANA_PROD_USER }}
+            GRAFANA_PROD_PASSWORD: ${{ secrets.GRAFANA_PROD_PASSWORD }}
+            GRAFANA_STAGE_USER: ${{ secrets.GRAFANA_STAGE_USER }}
+            GRAFANA_STAGE_PASSWORD: ${{ secrets.GRAFANA_STAGE_PASSWORD }}
         run: |
             echo "Configuring ${{ matrix.server }}"
 
@@ -84,4 +108,3 @@ jobs:
             --private-key "$KEY_FILE"
 
             rm -f "$KEY_FILE"
-

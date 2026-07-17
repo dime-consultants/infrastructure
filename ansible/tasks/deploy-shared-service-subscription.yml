@@ -1,0 +1,18 @@
+---
+- name: Resolve subscribed shared service environments
+  set_fact:
+    shared_service_environment_names: >-
+      {{
+        shared_service_subscription.environments.keys() | list
+        if shared_service_subscription.environments is mapping
+        else shared_service_subscription.environments
+      }}
+
+- name: Deploy subscribed shared service environments
+  include_tasks: deploy-shared-service.yml
+  loop: "{{ shared_service_environment_names }}"
+  loop_control:
+    label: "{{ shared_service_subscription.name }}:{{ item }}"
+  vars:
+    shared_service_name: "{{ shared_service_subscription.name }}"
+    shared_service_env: "{{ item }}"

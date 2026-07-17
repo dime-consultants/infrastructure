@@ -3,3 +3,4 @@ common_packages:
   - ufw
   - certbot
   - python3-certbot-nginx
+  - python3-docker

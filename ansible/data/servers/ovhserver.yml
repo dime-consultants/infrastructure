@@ -1,9 +1,37 @@
 server_name: ovhserver
-ssh_user: ubuntu
 ssh_secret_name: OVHSERVER_SSH_KEY
-public_ip: 51.77.147.233
+ssh_user_secret_name: OVHSERVER_SSH_USER
+public_ip_secret_name: OVHSERVER_PUBLIC_IP
 
 firewall_extra_ports: []
+
+shared_services:
+  - name: postgres
+    environments:
+      prod: {}
+      stage: {}
+  - name: rabbitmq
+    environments:
+      prod:
+        domain: rabbitmq.stmarysacademy.sc.ke
+        basic_auth: true
+      stage: {}
+  - name: portainer
+    environments:
+      prod:
+        domain: portainer.rentwaveafrica.co.ke
+      stage: {}
+  - name: grafana
+    environments:
+      prod:
+        domain: grafana.rentwaveafrica.co.ke
+      stage: {}
+  - name: flower
+    environments:
+      prod:
+        domain: flower.stmarysacademy.sc.ke
+        basic_auth: true
+      stage: {}
 
 apps:
   - name: zanaka-backend
@@ -12,9 +40,11 @@ apps:
       prod:
         domain: api.stmarysacademy.sc.ke
         port: 8000
+        celery_namespace: zanaka-backend
       stage:
         domain: stage-api.stmarysacademy.sc.ke
         port: 8001
+        celery_namespace: zanaka-backend
 
   - name: zanaka-ui
     repo: stevendegwa/zanaka-ui
@@ -32,9 +62,11 @@ apps:
       prod:
         domain: api.rentwaveafrica.co.ke
         port: 8002
+        celery_namespace: rentwave-backend
       stage:
         domain: stage-api.rentwaveafrica.co.ke
         port: 8003
+        celery_namespace: rentwave-backend
 
   - name: rentwave-ui
     repo: rentwave/mvpm-ui
@@ -52,9 +84,11 @@ apps:
       prod:
         domain: utilities.rentwaveafrica.co.ke
         port: 8005
+        celery_namespace: rentwave-utilities-backend
       stage:
         domain: stage-utilities.rentwaveafrica.co.ke
         port: 8006
+        celery_namespace: rentwave-utilities-backend
 
   - name: st-marys-academy-website
     repo: stevendegwa/st-marys-academy-website
@@ -69,9 +103,11 @@ apps:
       prod:
         domain: api.lipasync.com
         port: 8007
+        celery_namespace: lipasync-backend
       stage:
         domain: stage-api.lipasync.com
         port: 8008
+        celery_namespace: lipasync-backend
 
   - name: lipasync-ui
     repo: jkmutua/lipasync-ui
@@ -89,9 +125,11 @@ apps:
       prod:
         domain: api.quidpath.com
         port: 8004
+        celery_namespace: quidpath-backend
       stage:
         domain: stage-api.quidpath.com
         port: 8011
+        celery_namespace: quidpath-backend
 
   - name: quidpath-ui
     repo: quidpath/v1-ui
@@ -109,9 +147,11 @@ apps:
       prod:
         domain: qb.lipasync.com
         port: 8012
+        celery_namespace: qb-backend
       stage:
         domain: stage-qb.lipasync.com
         port: 8013
+        celery_namespace: qb-backend
 
   - name: qb-ui
     repo: sosiru/qb-ui
@@ -129,9 +169,13 @@ apps:
       prod:
         domain: payments.lipasync.com
         port: 8014
+        postgres_database: payments
+        celery_namespace: payments
       stage:
         domain: stage-payments.lipasync.com
         port: 8015
+        postgres_database: payments
+        celery_namespace: payments
 
   - name: notification-bus
     repo: stevendegwa/notification-bus
@@ -139,18 +183,10 @@ apps:
       prod:
         domain: notify.lipasync.com
         port: 8016
+        celery_namespace: notification-bus
       stage:
         domain: stage-notify.lipasync.com
         port: 8017
+        celery_namespace: notification-bus
 
-extra_domains:
-   - domain: flower.stmarysacademy.sc.ke
-     proxy_port: 5555
-     basic_auth: true
-   - domain: portainer.rentwaveafrica.co.ke
-     proxy_port: 9000
-   - domain: grafana.rentwaveafrica.co.ke
-     proxy_port: 3000
-   - domain: rabbitmq.stmarysacademy.sc.ke
-     proxy_port: 15672
-     basic_auth: true
+extra_domains: []

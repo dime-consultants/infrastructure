@@ -1,0 +1,30 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+    ports:
+      - "127.0.0.1:${RABBITMQ_AMQP_PORT}:5672"
+      - "127.0.0.1:${RABBITMQ_MANAGEMENT_PORT}:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      default:
+        aliases:
+          - ${SERVICE_HOST}
+
+networks:
+  default:
+    name: ${SHARED_NETWORK}
+    external: true
+
+volumes:
+  rabbitmq_data:
+    name: ${SERVICE_VOLUME}
