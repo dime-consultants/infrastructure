@@ -53,37 +53,3 @@
     remove_orphans: true
     wait: true
     wait_timeout: 300
-
-- name: Provision Postgres app databases
-  include_tasks: provision-postgres-database.yml
-  loop: "{{ apps | default([]) }}"
-  loop_control:
-    loop_var: postgres_app
-    label: "{{ postgres_app.name }}:{{ shared_service_env }}"
-  vars:
-    postgres_app_env: "{{ postgres_app.environments[shared_service_env] }}"
-    postgres_secret_names: "{{ shared_service_subscription.environments[shared_service_env].secret_names | default(shared_service_env_config.secret_names | default({})) }}"
-  when:
-    - shared_service_name == 'postgres'
-    - shared_service_subscription.environments is mapping
-    - shared_service_env in shared_service_subscription.environments
-    - postgres_app.environments is defined
-    - shared_service_env in postgres_app.environments
-    - postgres_app.environments[shared_service_env].postgres_database is defined
-
-- name: Provision RabbitMQ app namespaces
-  include_tasks: provision-rabbitmq-namespace.yml
-  loop: "{{ apps | default([]) }}"
-  loop_control:
-    loop_var: rabbitmq_app
-    label: "{{ rabbitmq_app.name }}:{{ shared_service_env }}"
-  vars:
-    rabbitmq_app_env: "{{ rabbitmq_app.environments[shared_service_env] }}"
-    rabbitmq_secret_names: "{{ shared_service_subscription.environments[shared_service_env].secret_names | default(shared_service_env_config.secret_names | default({})) }}"
-  when:
-    - shared_service_name == 'rabbitmq'
-    - shared_service_subscription.environments is mapping
-    - shared_service_env in shared_service_subscription.environments
-    - rabbitmq_app.environments is defined
-    - shared_service_env in rabbitmq_app.environments
-    - rabbitmq_app.environments[shared_service_env].rabbitmq_namespace is defined
