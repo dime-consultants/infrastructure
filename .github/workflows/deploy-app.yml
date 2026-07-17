@@ -114,9 +114,28 @@ jobs:
           echo "IMAGE_TAG=${{ github.event.client_payload.image_tag }}" > /tmp/.env
           echo "SHARED_ENV=${{ github.event.client_payload.env }}" >> /tmp/.env
 
-          # Append all secrets from payload
+          # Append app secrets from payload. Infrastructure-owned values are
+          # derived from ansible/data/servers and ansible/data/shared-services.
           echo '${{ toJson(github.event.client_payload.env_secrets) }}' | \
-            jq -r 'to_entries[] | "\(.key)=\(.value)"' >> /tmp/.env
+            jq -r '
+              [
+                "IMAGE_TAG",
+                "SHARED_ENV",
+                "SHARED_NETWORK",
+                "DATABASE_DB",
+                "DATABASE_USER",
+                "DATABASE_PASSWORD",
+                "DATABASE_HOST",
+                "DATABASE_PORT",
+                "RABBITMQ_NAMESPACE",
+                "RABBITMQ_DEFAULT_USER",
+                "RABBITMQ_DEFAULT_PASS",
+                "CELERY_BROKER_URL"
+              ] as $reserved
+              | to_entries[]
+              | select(($reserved | index(.key)) | not)
+              | "\(.key)=\(.value)"
+            ' >> /tmp/.env
 
       - name: Append app environment metadata
         if: ${{ contains(needs.prepare.outputs.servers, matrix.server) }}
@@ -257,12 +276,14 @@ jobs:
                           f"rabbitmq:{env_name}",
                       )
                       rabbitmq_host = rabbitmq_config.get("service_host", "rabbitmq")
+                      rabbitmq_user_url = quote(rabbitmq_user, safe="")
+                      rabbitmq_password_url = quote(rabbitmq_password, safe="")
                       env_values.update({
                           "RABBITMQ_NAMESPACE": rabbitmq_namespace,
                           "RABBITMQ_DEFAULT_USER": rabbitmq_user,
                           "RABBITMQ_DEFAULT_PASS": rabbitmq_password,
                           "CELERY_BROKER_URL": (
-                              f"amqp://{rabbitmq_user}:{rabbitmq_password}"
+                              f"amqp://{rabbitmq_user_url}:{rabbitmq_password_url}"
                               f"@{rabbitmq_host}:5672/"
                               f"{quote(rabbitmq_namespace, safe='')}"
                           ),
