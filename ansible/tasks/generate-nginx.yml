@@ -9,6 +9,18 @@
     path: /etc/nginx/sites-available/default
     state: absent
 
+- name: Remove previously generated Nginx site symlinks
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ lookup('ansible.builtin.fileglob', '/etc/nginx/sites-enabled/*.conf', wantlist=True) }}"
+
+- name: Remove previously generated Nginx site configs
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ lookup('ansible.builtin.fileglob', '/etc/nginx/sites-available/*.conf', wantlist=True) }}"
+
 - name: Gather all app domains
   set_fact:
     app_domains: >-
@@ -210,18 +222,6 @@
   vars:
     app: "{{ apps | selectattr('environments.' + env.key + '.domain', 'in', ssl_ready_domains) | first }}"
   when: app is defined
-
-- name: Remove HTTPS configs without certificates (sites-available)
-  file:
-    path: "/etc/nginx/sites-available/extra-{{ item | replace('.', '-') }}.conf"
-    state: absent
-  loop: "{{ all_domains | difference(ssl_ready_domains) }}"
-
-- name: Remove dangling HTTPS symlinks (sites-enabled)
-  file:
-    path: "/etc/nginx/sites-enabled/extra-{{ item | replace('.', '-') }}.conf"
-    state: absent
-  loop: "{{ all_domains | difference(ssl_ready_domains) }}"
 
 - name: Test nginx HTTPS config
   command: nginx -t
