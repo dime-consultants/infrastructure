@@ -36,10 +36,17 @@
       -e RABBITMQ_NAMESPACE \
       -e RABBITMQ_USERNAME \
       "$RABBITMQ_CONTAINER" \
-      sh -s <<'SH'
-    rabbitmqctl add_vhost "$RABBITMQ_NAMESPACE" || true
-    rabbitmqctl set_permissions -p "$RABBITMQ_NAMESPACE" "$RABBITMQ_USERNAME" ".*" ".*" ".*"
-    SH
+      sh -ec '
+        if rabbitmqctl list_vhosts --silent | grep -Fx "$RABBITMQ_NAMESPACE" >/dev/null; then
+          echo "RabbitMQ vhost $RABBITMQ_NAMESPACE already exists"
+        else
+          rabbitmqctl add_vhost "$RABBITMQ_NAMESPACE"
+          echo "created RabbitMQ vhost $RABBITMQ_NAMESPACE"
+        fi
+
+        rabbitmqctl set_permissions -p "$RABBITMQ_NAMESPACE" "$RABBITMQ_USERNAME" ".*" ".*" ".*"
+        rabbitmqctl list_vhosts --silent | grep -Fx "$RABBITMQ_NAMESPACE"
+      '
   environment:
     RABBITMQ_NAMESPACE: "{{ rabbitmq_namespace }}"
     RABBITMQ_USERNAME: "{{ rabbitmq_username }}"
