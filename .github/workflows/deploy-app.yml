@@ -118,7 +118,8 @@ jobs:
           # derived from ansible/data/servers and ansible/data/shared-services.
           echo '${{ toJson(github.event.client_payload.env_secrets) }}' | \
             jq -r '
-              [
+              . as $secrets
+              | [
                 "IMAGE_TAG",
                 "SHARED_ENV",
                 "SHARED_NETWORK",
@@ -131,10 +132,12 @@ jobs:
                 "RABBITMQ_DEFAULT_USER",
                 "RABBITMQ_DEFAULT_PASS",
                 "CELERY_BROKER_URL"
-              ] as $reserved
+              ] | map({(.): true}) | add as $reserved
+              | $secrets
               | to_entries[]
-              | select(($reserved | index(.key)) | not)
-              | "\(.key)=\(.value)"
+              | . as $entry
+              | select(($reserved | has($entry.key)) | not)
+              | "\($entry.key)=\($entry.value)"
             ' >> /tmp/.env
 
       - name: Append app environment metadata

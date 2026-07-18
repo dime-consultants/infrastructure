@@ -13,6 +13,10 @@ Flower credentials.
 | `BASIC_AUTH_USERNAME` | Nginx basic auth username |
 | `BASIC_AUTH_PASSWORD` | Nginx basic auth password |
 
+Base config fails if any server domain has `basic_auth: true` and either secret
+is missing. The generated `/etc/nginx/.htpasswd` file is used by RabbitMQ,
+Flower, and any other proxied domain with `basic_auth: true`.
+
 ## `ovhserver`
 
 Connection secrets:

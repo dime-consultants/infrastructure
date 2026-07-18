@@ -118,6 +118,45 @@
         state: directory
         mode: '0755'
 
+    - name: Resolve Nginx basic auth credentials
+      set_fact:
+        basic_auth_username: "{{ lookup('env', 'BASIC_AUTH_USERNAME') }}"
+        basic_auth_password: "{{ lookup('env', 'BASIC_AUTH_PASSWORD') }}"
+
+    - name: Resolve domains requiring Nginx basic auth
+      set_fact:
+        basic_auth_domains_json: >-
+          {%- set auth = namespace(domains=[]) -%}
+          {%- for service in shared_services | default([]) -%}
+          {%- if service.environments is mapping -%}
+          {%- for env_name, env_options in service.environments.items() -%}
+          {%- if env_options.basic_auth | default(false) and env_options.domain is defined -%}
+          {%- set _ = auth.domains.append(env_options.domain) -%}
+          {%- endif -%}
+          {%- endfor -%}
+          {%- endif -%}
+          {%- endfor -%}
+          {%- for domain_options in extra_domains | default([]) -%}
+          {%- if domain_options.basic_auth | default(false) and domain_options.domain is defined -%}
+          {%- set _ = auth.domains.append(domain_options.domain) -%}
+          {%- endif -%}
+          {%- endfor -%}
+          {{ auth.domains | to_json }}
+
+    - name: Parse domains requiring Nginx basic auth
+      set_fact:
+        basic_auth_domains: "{{ basic_auth_domains_json | from_json }}"
+
+    - name: Validate Nginx basic auth credentials
+      assert:
+        that:
+          - basic_auth_username | length > 0
+          - basic_auth_password | length > 0
+        fail_msg: >-
+          BASIC_AUTH_USERNAME and BASIC_AUTH_PASSWORD GitHub Secrets are required
+          because these domains use basic_auth: {{ basic_auth_domains | join(', ') }}.
+      when: basic_auth_domains | length > 0
+
     - name: Install htpasswd utility
       apt:
         name: apache2-utils
@@ -132,7 +171,7 @@
         group: www-data
         mode: '0640'
         state: present
-      when: basic_auth_username is defined and basic_auth_password is defined
+      when: basic_auth_domains | length > 0
 
     - name: Generate Nginx sites for all apps and environments
       include_tasks: ../tasks/generate-nginx.yml
