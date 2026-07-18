@@ -8,9 +8,12 @@ shared_services:
     environments:
       prod:
         domain: rabbitmq.example.com
-        basic_auth: true
       stage: {}
 ```
+
+Do not put Nginx `basic_auth` in front of the RabbitMQ management UI. The UI
+uses the HTTP `Authorization` header for RabbitMQ's own login API, so an outer
+Basic Auth challenge can make successful logins bounce back to the login page.
 
 App compose files should not define their own RabbitMQ container. Attach the app
 to the matching external network and read the broker URL from the deploy-provided

@@ -14,7 +14,6 @@ shared_services:
     environments:
       prod:
         domain: rabbitmq.stmarysacademy.sc.ke
-        basic_auth: true
       stage: {}
   - name: portainer
     environments:

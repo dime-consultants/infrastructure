@@ -26,10 +26,8 @@ shared_services:
     environments:
       prod:
         domain: rabbitmq.example.com
-        basic_auth: true
       stage:
         domain: stage-rabbitmq.example.com
-        basic_auth: true
 
   - name: portainer
     environments:

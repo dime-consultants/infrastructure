@@ -30,12 +30,15 @@ shared_services:
     environments:
       prod:
         domain: rabbitmq.example.com
-        basic_auth: true
       stage: {}
 ```
 
 If the default proxy port from `ansible/data/shared-services.yml` is not right
 for a domain, set `proxy_port` beside `domain`.
+
+RabbitMQ management domains should use RabbitMQ's own login only. Do not add
+Nginx `basic_auth` to RabbitMQ, because both layers need the same HTTP
+`Authorization` header.
 
 Applications should not include shared service containers in their own compose
 files. Instead, make the compose default network point at the matching external
