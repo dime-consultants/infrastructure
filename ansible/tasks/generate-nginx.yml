@@ -53,7 +53,7 @@
         'domain': env_options.domain,
         'proxy_port': proxy_port,
         'basic_auth': (env_options.basic_auth | default(false)) and service.name != 'rabbitmq',
-        'preserve_authorization': env_options.preserve_authorization | default(service.name == 'rabbitmq')
+        'preserve_authorization': env_options.preserve_authorization | default(service.name in ['rabbitmq', 'portainer', 'grafana'])
       }) -%}
       {%- endif -%}
       {%- endfor -%}

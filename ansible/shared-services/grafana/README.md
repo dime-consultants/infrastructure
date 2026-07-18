@@ -47,6 +47,9 @@ Production Grafana is published on `127.0.0.1:3000`. Stage support exists in
 the shared-service catalog, but servers should only subscribe to it if they
 intentionally need a separate stage Grafana instance.
 
+When exposed through Nginx, Grafana should receive the browser's `Authorization`
+header so API requests and token-based access continue to work.
+
 Logs are available from the provisioned `Loki` datasource. Useful selectors:
 
 ```logql

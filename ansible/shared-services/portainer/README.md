@@ -31,3 +31,8 @@ services:
 Production HTTP is published on `127.0.0.1:9000`. Stage support exists in the
 shared-service catalog, but servers should only subscribe to it if they
 intentionally need a separate stage Portainer instance.
+
+When exposed through Nginx, Portainer must receive the browser's
+`Authorization` header. Its UI uses that bearer token for environment API calls;
+if the proxy strips it, the UI can log in but fail with `Failed loading
+environment` for the `primary` environment.
