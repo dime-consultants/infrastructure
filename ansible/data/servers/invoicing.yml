@@ -1,7 +1,7 @@
-server_name: ovhserver
-ssh_secret_name: OVHSERVER_SSH_KEY
-ssh_user_secret_name: OVHSERVER_SSH_USER
-public_ip_secret_name: OVHSERVER_PUBLIC_IP
+server_name: invoicing
+ssh_secret_name: invoicing_SSH_KEY
+ssh_user_secret_name: invoicing_SSH_USER
+public_ip_secret_name: invoicing_PUBLIC_IP
 
 firewall_extra_ports: []
 
@@ -10,29 +10,19 @@ shared_services:
     environments:
       prod: {}
       stage: {}
-  - name: rabbitmq
-    environments:
-      prod:
-        domain: rabbitmq.stmarysacademy.sc.ke
-      stage: {}
   - name: portainer
     environments:
       prod:
-        domain: portainer.rentwaveafrica.co.ke
+        domain: portainer.dimeapp.co.ke
   - name: grafana
     environments:
       prod:
-        domain: grafana.rentwaveafrica.co.ke
-  - name: flower
-    environments:
-      prod:
-        domain: flower.stmarysacademy.sc.ke
-        basic_auth: true
-      stage: {}
+        domain: grafana.dimeapp.co.ke
+
 
 apps:
-  - name: zanaka-backend
-    repo: stevendegwa/zanaka
+  - name: invoicing-backend
+    repo: dime-consultants/ai_invoicing
     port_env: API_PORT
     postgres_database: zanaka
     rabbitmq_namespace: zanaka
