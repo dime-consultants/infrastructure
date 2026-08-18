@@ -11,7 +11,19 @@
 - name: Resolve shared service config
   set_fact:
     shared_service_config: "{{ shared_service_catalog[shared_service_name] }}"
-    shared_service_env_config: "{{ shared_service_catalog[shared_service_name].environments[shared_service_env] }}"
+    shared_service_env_config: >-
+      {{
+        shared_service_catalog[shared_service_name].environments[shared_service_env]
+        | combine(
+            (
+              shared_service_subscription.environments[shared_service_env]
+              | default({}, true)
+              if shared_service_subscription.environments is mapping
+              else {}
+            ),
+            recursive=True
+          )
+      }}
     shared_service_project_dir: "{{ shared_service_base_dir }}/{{ shared_service_name }}/{{ shared_service_env }}"
 
 - name: Ensure shared service project directory exists

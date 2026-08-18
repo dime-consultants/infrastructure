@@ -45,10 +45,14 @@
       {%- if env_options.domain is defined and env_name in shared_service_catalog[service.name].environments -%}
       {%- set catalog_env = shared_service_catalog[service.name].environments[env_name] -%}
       {%- set proxy_port = env_options.proxy_port
+          | default(env_options.management_port
+          | default(env_options.http_port
+          | default(env_options.published_port
+          | default(env_options.amqp_port
           | default(catalog_env.management_port
           | default(catalog_env.http_port
           | default(catalog_env.published_port
-          | default(catalog_env.amqp_port | default(omit))))) -%}
+          | default(catalog_env.amqp_port | default(omit))))))))) -%}
       {%- set _ = domains.append({
         'domain': env_options.domain,
         'proxy_port': proxy_port,
