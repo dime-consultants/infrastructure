@@ -32,6 +32,28 @@ shared_service_catalog:
           username: POSTGRES_STAGE_USER
           password: POSTGRES_STAGE_PASSWORD
 
+  rabbitmq:
+    description: RabbitMQ broker with management UI
+    compose_file: ../shared-services/rabbitmq/docker-compose.yml
+    environments:
+      prod:
+        amqp_port: 5672
+        management_port: 15672
+        network: shared-prod
+        volume: shared_rabbitmq_prod_data
+        service_host: rabbitmq
+        secret_names:
+          username: RABBITMQ_PROD_USER
+          password: RABBITMQ_PROD_PASSWORD
+      stage:
+        amqp_port: 5673
+        management_port: 15673
+        network: shared-stage
+        volume: shared_rabbitmq_stage_data
+        service_host: rabbitmq
+        secret_names:
+          username: RABBITMQ_STAGE_USER
+          password: RABBITMQ_STAGE_PASSWORD
 
   portainer:
     description: Docker management UI
