@@ -2,7 +2,7 @@ name: Base Server Configuration
 
 on:
   push:
-    branches: [ main ]
+    branches: [ master ]
     # paths:
     #   - 'ansible/data/**'
     #   - 'ansible/playbooks/base-setup.yml'
