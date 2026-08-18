@@ -35,7 +35,7 @@ apps:
         port: 6001
 
   - name: guardian-ui
-    repo: dime-consultants/Guardian-Bank-UI
+    repo: dime-consultants/guardian
     port_env: API_PORT
     environments:
       prod:
