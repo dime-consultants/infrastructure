@@ -80,20 +80,11 @@ jobs:
             TARGET_SERVER: ${{ matrix.server }}
             TARGET_PUBLIC_IP: ${{ secrets[format('{0}', matrix.public_ip_secret_name)] }}
             TARGET_SSH_USER: ${{ secrets[format('{0}', matrix.ssh_user_secret_name)] }}
-            BASIC_AUTH_USERNAME: ${{ secrets.BASIC_AUTH_USERNAME }}
-            BASIC_AUTH_PASSWORD: ${{ secrets.BASIC_AUTH_PASSWORD }}
             POSTGRES_PROD_USER: ${{ secrets.POSTGRES_PROD_USER }}
             POSTGRES_PROD_PASSWORD: ${{ secrets.POSTGRES_PROD_PASSWORD }}
             POSTGRES_STAGE_USER: ${{ secrets.POSTGRES_STAGE_USER }}
             POSTGRES_STAGE_PASSWORD: ${{ secrets.POSTGRES_STAGE_PASSWORD }}
-            RABBITMQ_PROD_USER: ${{ secrets.RABBITMQ_PROD_USER }}
-            RABBITMQ_PROD_PASSWORD: ${{ secrets.RABBITMQ_PROD_PASSWORD }}
-            RABBITMQ_STAGE_USER: ${{ secrets.RABBITMQ_STAGE_USER }}
-            RABBITMQ_STAGE_PASSWORD: ${{ secrets.RABBITMQ_STAGE_PASSWORD }}
-            GRAFANA_PROD_USER: ${{ secrets.GRAFANA_PROD_USER }}
-            GRAFANA_PROD_PASSWORD: ${{ secrets.GRAFANA_PROD_PASSWORD }}
-            GRAFANA_STAGE_USER: ${{ secrets.GRAFANA_STAGE_USER }}
-            GRAFANA_STAGE_PASSWORD: ${{ secrets.GRAFANA_STAGE_PASSWORD }}
+
         run: |
             echo "Configuring ${{ matrix.server }}"
 
