@@ -22,7 +22,7 @@ shared_services:
 
 apps:
   - name: invoicing
-    repo: dime-consultants/invoicing
+    repo: dime-consultants/ai_invoicing
     port_env: API_PORT
     postgres_database: invoicing
     environments:
