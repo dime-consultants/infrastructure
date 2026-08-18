@@ -25,7 +25,6 @@ apps:
     repo: dime-consultants/invoicing
     port_env: API_PORT
     postgres_database: invoicing
-    rabbitmq_namespace: invoicing
     environments:
       prod:
         domain: invoicing.dimeconsultants.africa
