@@ -28,164 +28,21 @@ apps:
     rabbitmq_namespace: zanaka
     environments:
       prod:
-        domain: api.stmarysacademy.sc.ke
-        port: 8000
+        domain: invoicing.dimeconsultants.africa
+        port: 6000
       stage:
-        domain: stage-api.stmarysacademy.sc.ke
-        port: 8001
+        domain: stage-invoicing.dimeconsultants.africa
+        port: 6001
 
-  - name: zanaka-ui
-    repo: stevendegwa/zanaka-ui
+  - name: guardian-ui
+    repo: dime-consultants/Guardian-Bank-UI
     port_env: API_PORT
     environments:
       prod:
-        domain: app.stmarysacademy.sc.ke
+        domain: guardian.dimeconsultants.africa
         port: 3004
       stage:
-        domain: stage-app.stmarysacademy.sc.ke
+        domain: stage-guardian.dimeconsultants.africa
         port: 3005
-
-  - name: rentwave-backend
-    repo: rentwave/mvpm
-    port_env: API_PORT
-    postgres_database: rentwave
-    rabbitmq_namespace: rentwave
-    environments:
-      prod:
-        domain: api.rentwaveafrica.co.ke
-        port: 8002
-      stage:
-        domain: stage-api.rentwaveafrica.co.ke
-        port: 8003
-
-  - name: rentwave-ui
-    repo: rentwave/mvpm-ui
-    port_env: API_PORT
-    environments:
-      prod:
-        domain: rentwaveafrica.co.ke
-        port: 3001
-      stage:
-        domain: stage.rentwaveafrica.co.ke
-        port: 3002
-
-  - name: rentwave-utilities-backend
-    repo: stevendegwa/mvpm-utilities
-    port_env: API_PORT
-    postgres_database: rentwave-utilities
-    rabbitmq_namespace: rentwave-utilities
-    environments:
-      prod:
-        domain: utilities.rentwaveafrica.co.ke
-        port: 8005
-      stage:
-        domain: stage-utilities.rentwaveafrica.co.ke
-        port: 8006
-
-  - name: st-marys-academy-website
-    repo: stevendegwa/st-marys-academy-website
-    port_env: API_PORT
-    environments:
-      prod:
-        domain: stmarysacademy.sc.ke
-        port: 3003
-
-  - name: lipasync-backend
-    repo: jkmutua/lipasync
-    port_env: API_PORT
-    postgres_database: lipasync
-    rabbitmq_namespace: lipasync
-    environments:
-      prod:
-        domain: api.lipasync.com
-        port: 8007
-      stage:
-        domain: stage-api.lipasync.com
-        port: 8008
-
-  - name: lipasync-ui
-    repo: jkmutua/lipasync-ui
-    port_env: API_PORT
-    environments:
-      prod:
-        domain: lipasync.com
-        port: 3006
-      stage:
-        domain: stage.lipasync.com
-        port: 3007
-
-  - name: quidpath-backend
-    repo: quidpath/quidpath
-    port_env: API_PORT
-    postgres_database: quidpath
-    rabbitmq_namespace: quidpath
-    environments:
-      prod:
-        domain: api.quidpath.com
-        port: 8004
-      stage:
-        domain: stage-api.quidpath.com
-        port: 8011
-
-  - name: quidpath-ui
-    repo: quidpath/v1-ui
-    port_env: API_PORT
-    environments:
-      prod:
-        domain: quidpath.com
-        port: 3008
-      stage:
-        domain: stage.quidpath.com
-        port: 3009
-
-  - name: qb-backend
-    repo: sosiru/qb
-    port_env: API_PORT
-    postgres_database: qb
-    rabbitmq_namespace: qb
-    environments:
-      prod:
-        domain: qb.lipasync.com
-        port: 8012
-      stage:
-        domain: stage-qb.lipasync.com
-        port: 8013
-
-  - name: qb-ui
-    repo: sosiru/qb-ui
-    port_env: API_PORT
-    environments:
-      prod:
-        domain: qb-ui.lipasync.com
-        port: 3010
-      stage:
-        domain: stage-qb-ui.lipasync.com
-        port: 3011
-
-  - name: payments
-    repo: stevendegwa/payments
-    port_env: API_PORT
-    postgres_database: payments
-    rabbitmq_namespace: payments
-    environments:
-      prod:
-        domain: payments.lipasync.com
-        port: 8014
-      stage:
-        domain: stage-payments.lipasync.com
-        port: 8015
-
-  - name: notification-bus
-    repo: stevendegwa/notification-bus
-    port_env: API_PORT
-    postgres_database: notify
-    rabbitmq_namespace: notification-bus
-    environments:
-      prod:
-        domain: notify.lipasync.com
-        port: 8016
-      stage:
-        domain: stage-notify.lipasync.com
-        port: 8017
 
 extra_domains: []
