@@ -24,8 +24,8 @@ apps:
   - name: invoicing-backend
     repo: dime-consultants/ai_invoicing
     port_env: API_PORT
-    postgres_database: zanaka
-    rabbitmq_namespace: zanaka
+    postgres_database: invoicing
+    rabbitmq_namespace: invoicing
     environments:
       prod:
         domain: invoicing.dimeconsultants.africa
