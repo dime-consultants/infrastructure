@@ -1,7 +1,7 @@
 server_name: invoicing
-ssh_secret_name: invoicing_SSH_KEY
-ssh_user_secret_name: invoicing_SSH_USER
-public_ip_secret_name: invoicing_PUBLIC_IP
+ssh_secret_name: INVOICING_SSH_KEY
+ssh_user_secret_name: INVOICING_SSH_USER
+public_ip_secret_name: INVOICING_PUBLIC_IP
 
 firewall_extra_ports: []
 
