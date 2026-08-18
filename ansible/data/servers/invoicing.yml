@@ -21,8 +21,8 @@ shared_services:
 
 
 apps:
-  - name: invoicing-backend
-    repo: dime-consultants/ai_invoicing
+  - name: invoicing
+    repo: dime-consultants/invoicing
     port_env: API_PORT
     postgres_database: invoicing
     rabbitmq_namespace: invoicing
@@ -34,7 +34,7 @@ apps:
         domain: stage-invoicing.dimeconsultants.africa
         port: 6001
 
-  - name: guardian-ui
+  - name: guardian
     repo: dime-consultants/guardian
     port_env: API_PORT
     environments:
