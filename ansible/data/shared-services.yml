@@ -32,3 +32,58 @@ shared_service_catalog:
           username: POSTGRES_STAGE_USER
           password: POSTGRES_STAGE_PASSWORD
 
+
+  portainer:
+    description: Docker management UI
+    compose_file: ../shared-services/portainer/docker-compose.yml
+    environments:
+      prod:
+        http_port: 9000
+        https_port: 9443
+        network: shared-prod
+        volume: shared_portainer_prod_data
+        service_host: portainer
+      stage:
+        http_port: 9001
+        https_port: 9444
+        network: shared-stage
+        volume: shared_portainer_stage_data
+        service_host: portainer
+
+  grafana:
+    description: Metrics and dashboard UI
+    compose_file: ../shared-services/grafana/docker-compose.yml
+    environments:
+      prod:
+        published_port: 3000
+        network: shared-prod
+        volume: shared_grafana_prod_data
+        loki_volume: shared_loki_prod_data
+        promtail_volume: shared_promtail_prod_data
+        service_host: grafana
+        secret_names:
+          username: GRAFANA_PROD_USER
+          password: GRAFANA_PROD_PASSWORD
+      stage:
+        published_port: 3100
+        network: shared-stage
+        volume: shared_grafana_stage_data
+        loki_volume: shared_loki_stage_data
+        promtail_volume: shared_promtail_stage_data
+        service_host: grafana
+        secret_names:
+          username: GRAFANA_STAGE_USER
+          password: GRAFANA_STAGE_PASSWORD
+
+  flower:
+    description: Celery task monitoring UI
+    compose_file: ../shared-services/flower/docker-compose.yml
+    environments:
+      prod:
+        published_port: 5555
+        network: shared-prod
+        service_host: flower
+      stage:
+        published_port: 5556
+        network: shared-stage
+        service_host: flower
