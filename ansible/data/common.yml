@@ -15,6 +15,7 @@ docker_maintenance:
   log_max_size: 20m
   log_max_file: "5"
   journal_vacuum_time: 14d
+  temp_file_min_age_days: 2
   max_disk_use_percent: 90
 
 backup_defaults:

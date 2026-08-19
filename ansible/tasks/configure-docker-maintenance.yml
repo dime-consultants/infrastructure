@@ -61,6 +61,51 @@
   apt:
     autoclean: yes
 
+- name: Truncate existing Docker json logs
+  shell: |
+    set -eu
+    find /var/lib/docker/containers \
+      -type f \
+      -name '*-json.log' \
+      -size +{{ docker_maintenance.log_max_size | default('20m') }} \
+      -exec sh -c ': > "$1"' _ {} \;
+  register: docker_log_truncate
+  changed_when: docker_log_truncate.rc == 0
+  failed_when: false
+
+- name: Remove old temporary files
+  shell: |
+    set -eu
+    find /tmp /var/tmp \
+      -xdev \
+      -mindepth 1 \
+      -mtime +{{ docker_maintenance.temp_file_min_age_days | default(2) }} \
+      -exec rm -rf {} +
+  register: temp_file_cleanup
+  changed_when: temp_file_cleanup.rc == 0
+  failed_when: false
+
+- name: Remove apt package archives
+  shell: |
+    set -eu
+    rm -rf /var/cache/apt/archives/*.deb /var/cache/apt/archives/partial/*
+  register: apt_archive_cleanup
+  changed_when: apt_archive_cleanup.rc == 0
+  failed_when: false
+
+- name: Remove old compressed system logs
+  shell: |
+    set -eu
+    find /var/log \
+      -xdev \
+      -type f \
+      \( -name '*.gz' -o -name '*.xz' -o -name '*.1' -o -name '*.old' \) \
+      -mtime +{{ docker_maintenance.temp_file_min_age_days | default(2) }} \
+      -delete
+  register: compressed_log_cleanup
+  changed_when: compressed_log_cleanup.rc == 0
+  failed_when: false
+
 - name: Collect disk usage after Docker maintenance
   command: df -P / /var/lib/docker
   register: disk_usage_after_cleanup
@@ -77,6 +122,35 @@
       awk 'NR > 1 { gsub("%", "", $5); if ($5 > max) max=$5 } END { print max + 0 }'
   register: max_disk_usage_after_cleanup
   changed_when: false
+
+- name: Find largest directories when disk remains high
+  shell: |
+    set -eu
+    {
+      echo "Top directories under /:"
+      du -xhd1 / 2>/dev/null | sort -hr | head -20
+      echo
+      echo "Top directories under /var:"
+      du -xhd1 /var 2>/dev/null | sort -hr | head -20
+      echo
+      echo "Top directories under /opt:"
+      du -xhd1 /opt 2>/dev/null | sort -hr | head -20
+      echo
+      echo "Largest files:"
+      find / -xdev -type f -size +100M -printf '%s %p\n' 2>/dev/null |
+        sort -nr |
+        head -30 |
+        awk '{ size=$1; $1=""; printf "%.1fM%s\n", size/1048576, $0 }'
+    }
+  register: disk_pressure_report
+  changed_when: false
+  failed_when: false
+  when: max_disk_usage_after_cleanup.stdout | int >= docker_maintenance.max_disk_use_percent | default(90) | int
+
+- name: Print disk pressure report
+  debug:
+    msg: "{{ disk_pressure_report.stdout_lines | default([]) }}"
+  when: max_disk_usage_after_cleanup.stdout | int >= docker_maintenance.max_disk_use_percent | default(90) | int
 
 - name: Validate disk space after cleanup
   assert:
