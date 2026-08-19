@@ -70,18 +70,19 @@
   debug:
     msg: "{{ disk_usage_after_cleanup.stdout_lines }}"
 
+- name: Calculate max disk usage after cleanup
+  shell: |
+    set -eu
+    df -P / /var/lib/docker |
+      awk 'NR > 1 { gsub("%", "", $5); if ($5 > max) max=$5 } END { print max + 0 }'
+  register: max_disk_usage_after_cleanup
+  changed_when: false
+
 - name: Validate disk space after cleanup
   assert:
     that:
-      - >-
-        {{
-          disk_usage_after_cleanup.stdout_lines[1:]
-          | map('regex_replace', '^.*\\s+(\\d+)%\\s+.*$', '\\1')
-          | map('int')
-          | max
-          < (docker_maintenance.max_disk_use_percent | default(90) | int)
-        }}
+      - max_disk_usage_after_cleanup.stdout | int < docker_maintenance.max_disk_use_percent | default(90) | int
     fail_msg: >-
       Disk is still above {{ docker_maintenance.max_disk_use_percent | default(90) }}%
       after cleanup. Free space or expand the server disk before deploying shared
-      services.
+      services. Current max usage is {{ max_disk_usage_after_cleanup.stdout }}%.

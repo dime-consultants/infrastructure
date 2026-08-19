@@ -72,10 +72,73 @@
           sh -ec '
             echo "provisioning database $APP_DB_NAME using admin database $POSTGRES_DB"
 
+            quote_literal() {
+              printf "%s" "$1" | sed "s/'/''/g"
+            }
+
+            find_admin_user() {
+              for candidate in "$POSTGRES_USER" postgres app; do
+                if psql -v ON_ERROR_STOP=1 \
+                    -U "$candidate" \
+                    -d "$POSTGRES_DB" \
+                    -tAc "SELECT 1" >/dev/null 2>&1; then
+                  printf "%s" "$candidate"
+                  return 0
+                fi
+              done
+
+              for candidate in "$POSTGRES_USER" postgres app; do
+                if psql -v ON_ERROR_STOP=1 \
+                    -U "$candidate" \
+                    -d postgres \
+                    -tAc "SELECT 1" >/dev/null 2>&1; then
+                  POSTGRES_DB=postgres
+                  printf "%s" "$candidate"
+                  return 0
+                fi
+              done
+
+              return 1
+            }
+
+            ADMIN_USER="$(find_admin_user)" || {
+              echo "could not find an existing Postgres admin role; tried desired role, postgres, and app" >&2
+              exit 1
+            }
+
+            echo "using existing Postgres admin role $ADMIN_USER"
+
+            role_exists() {
+              printf "%s\n" "SELECT 1 FROM pg_roles WHERE rolname = :'\'role_name\'';" |
+                psql -v ON_ERROR_STOP=1 \
+                  -U "$ADMIN_USER" \
+                  -d "$POSTGRES_DB" \
+                  -v role_name="$POSTGRES_USER" \
+                  -tA |
+                grep -qx 1
+            }
+
+            escaped_password="$(quote_literal "$PGPASSWORD")"
+            if role_exists; then
+              psql -v ON_ERROR_STOP=1 \
+                -U "$ADMIN_USER" \
+                -d "$POSTGRES_DB" \
+                -v role_name="$POSTGRES_USER" \
+                -c "ALTER ROLE \"$POSTGRES_USER\" WITH LOGIN PASSWORD '\''$escaped_password'\'';"
+              echo "updated role $POSTGRES_USER"
+            else
+              psql -v ON_ERROR_STOP=1 \
+                -U "$ADMIN_USER" \
+                -d "$POSTGRES_DB" \
+                -v role_name="$POSTGRES_USER" \
+                -c "CREATE ROLE \"$POSTGRES_USER\" WITH LOGIN PASSWORD '\''$escaped_password'\'';"
+              echo "created role $POSTGRES_USER"
+            fi
+
             database_exists() {
               printf "%s\n" "SELECT 1 FROM pg_database WHERE datname = :'\'app_db\'';" |
                 psql -v ON_ERROR_STOP=1 \
-                  -U "$POSTGRES_USER" \
+                  -U "$ADMIN_USER" \
                   -d "$POSTGRES_DB" \
                   -v app_db="$APP_DB_NAME" \
                   -tA |
@@ -85,12 +148,17 @@
             if database_exists; then
               echo "database $APP_DB_NAME already exists"
             else
-              createdb -U "$POSTGRES_USER" -O "$POSTGRES_USER" "$APP_DB_NAME"
+              createdb -U "$ADMIN_USER" -O "$POSTGRES_USER" "$APP_DB_NAME"
               echo "created database $APP_DB_NAME"
             fi
 
             psql -v ON_ERROR_STOP=1 \
-              -U "$POSTGRES_USER" \
+              -U "$ADMIN_USER" \
+              -d "$APP_DB_NAME" \
+              -c "GRANT ALL PRIVILEGES ON DATABASE \"$APP_DB_NAME\" TO \"$POSTGRES_USER\";"
+
+            psql -v ON_ERROR_STOP=1 \
+              -U "$ADMIN_USER" \
               -d "$APP_DB_NAME" \
               -c "GRANT ALL ON SCHEMA public TO \"$POSTGRES_USER\";"
 
@@ -102,7 +170,10 @@
         POSTGRES_DB: "{{ postgres_admin_database }}"
         APP_DB_NAME: "{{ postgres_database_name }}"
       register: postgres_database_provision
-      changed_when: "'created database' in postgres_database_provision.stdout"
+      changed_when: >-
+        'created database' in postgres_database_provision.stdout or
+        'created role' in postgres_database_provision.stdout or
+        'updated role' in postgres_database_provision.stdout
       retries: 3
       delay: 5
       until: postgres_database_provision.rc == 0
