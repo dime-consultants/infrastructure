@@ -6,6 +6,7 @@ public_ip_secret_name: INVOICING_PUBLIC_IP
 firewall_extra_ports: []
 
 docker_maintenance:
+  cleanup_min_disk_use_percent: 88
   journal_vacuum_size: 300M
 
 shared_services:
@@ -36,6 +37,9 @@ apps:
     rabbitmq_namespace: invoicing
     remove_deploy_artifacts:
       - /root/tools/ai_invoicing/image.tar
+    compose_pull: missing
+    compose_recreate: auto
+    compose_wait_timeout: 120
     environments:
       prod:
         domain: invoicing.dimeconsultants.africa

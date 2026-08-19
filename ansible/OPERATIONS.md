@@ -80,7 +80,18 @@ setup and app deployments:
 
 ```yaml
 docker_maintenance:
+  cleanup_min_disk_use_percent: 88
   journal_vacuum_size: 300M
+```
+
+App deployments run heavy Docker maintenance only when disk usage reaches
+`cleanup_min_disk_use_percent`, and post-deploy maintenance is off by default.
+Per-app Compose behavior can be tuned when the image tags are immutable:
+
+```yaml
+compose_pull: missing
+compose_recreate: auto
+compose_wait_timeout: 120
 ```
 
 App deployments do not create or mutate Postgres databases or RabbitMQ vhosts on

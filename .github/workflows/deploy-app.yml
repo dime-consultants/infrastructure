@@ -81,21 +81,26 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup tools
+        if: ${{ contains(fromJson(needs.prepare.outputs.servers_json), matrix.server) }}
         uses: actions/setup-python@v4
         with:
           python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: .github/requirements/deploy.txt
 
       - name: Install dependencies
+        if: ${{ contains(fromJson(needs.prepare.outputs.servers_json), matrix.server) }}
         run: |
-          pip install ansible yq
-          sudo apt-get update && sudo apt-get install -y jq docker-compose
+          pip install -r .github/requirements/deploy.txt
           ansible-galaxy collection install 'community.docker:>3.0.0'
 
       - name: Decode docker-compose.yml
+        if: ${{ contains(fromJson(needs.prepare.outputs.servers_json), matrix.server) }}
         run: |
           echo "${{ github.event.client_payload.docker_compose_b64 }}" | base64 -d > /tmp/docker-compose-raw.yml
 
       - name: Create .env file
+        if: ${{ contains(fromJson(needs.prepare.outputs.servers_json), matrix.server) }}
         env:
           IMAGE_TAG: ${{ github.event.client_payload.image_tag }}
           SHARED_ENV: ${{ github.event.client_payload.env }}

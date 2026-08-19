@@ -42,10 +42,24 @@
       set_fact:
         app_dir: "/opt/{{ deployment_app.name }}/{{ env }}"
 
+    - name: Calculate max disk usage before deployment
+      shell: |
+        set -eu
+        df -P / /var/lib/docker |
+          awk 'NR > 1 { gsub("%", "", $5); if ($5 > max) max=$5 } END { print max + 0 }'
+      register: max_disk_usage_before_deploy
+      changed_when: false
+
     - name: Pre-deploy Docker maintenance and disk check
       include_tasks: ../tasks/configure-docker-maintenance.yml
       vars:
         docker_maintenance_configure_daemon: false
+      when: >-
+        deployment_app_env.deploy_maintenance | default(true) | bool and
+        (
+          deployment_app_env.force_deploy_maintenance | default(false) | bool or
+          max_disk_usage_before_deploy.stdout | int >= docker_maintenance.cleanup_min_disk_use_percent | default(85) | int
+        )
 
     - name: Validate Postgres shared service catalog
       assert:
@@ -103,6 +117,7 @@
           state: absent
           remove_volumes: false
           remove_orphans: true
+      when: deployment_app_env.stop_before_deploy | default(false) | bool
 
     - name: Deploy with Docker Compose
       community.docker.docker_compose_v2:
@@ -113,13 +128,13 @@
         env_files:
           - .env
         state: present
-        pull: always
-        recreate: always
+        pull: "{{ deployment_app_env.compose_pull | default('always') }}"
+        recreate: "{{ deployment_app_env.compose_recreate | default('always') }}"
         remove_orphans: true
         remove_volumes: false
         dependencies: true
         wait: true
-        wait_timeout: 300
+        wait_timeout: "{{ deployment_app_env.compose_wait_timeout | default(300) }}"
       register: compose_output
       changed_when: true
 
@@ -127,3 +142,4 @@
       include_tasks: ../tasks/configure-docker-maintenance.yml
       vars:
         docker_maintenance_configure_daemon: false
+      when: deployment_app_env.post_deploy_maintenance | default(false) | bool
