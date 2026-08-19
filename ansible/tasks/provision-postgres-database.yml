@@ -64,17 +64,15 @@
         done
 
         docker exec \
+          -i \
           -e PGPASSWORD \
           -e POSTGRES_USER \
           -e POSTGRES_DB \
           -e APP_DB_NAME \
           "$POSTGRES_CONTAINER" \
-          sh -ec '
+          sh -s <<'POSTGRES_PROVISION'
+            set -eu
             echo "provisioning database $APP_DB_NAME using admin database $POSTGRES_DB"
-
-            quote_literal() {
-              printf "%s" "$1" | sed "s/'/''/g"
-            }
 
             find_admin_user() {
               for candidate in "$POSTGRES_USER" postgres app; do
@@ -118,20 +116,27 @@
                 grep -qx 1
             }
 
-            escaped_password="$(quote_literal "$PGPASSWORD")"
             if role_exists; then
               psql -v ON_ERROR_STOP=1 \
                 -U "$ADMIN_USER" \
                 -d "$POSTGRES_DB" \
                 -v role_name="$POSTGRES_USER" \
-                -c "ALTER ROLE \"$POSTGRES_USER\" WITH LOGIN PASSWORD '\''$escaped_password'\'';"
+                -v role_password="$PGPASSWORD" \
+                -tAc "SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'role_name', :'role_password');" |
+                psql -v ON_ERROR_STOP=1 \
+                  -U "$ADMIN_USER" \
+                  -d "$POSTGRES_DB"
               echo "updated role $POSTGRES_USER"
             else
               psql -v ON_ERROR_STOP=1 \
                 -U "$ADMIN_USER" \
                 -d "$POSTGRES_DB" \
                 -v role_name="$POSTGRES_USER" \
-                -c "CREATE ROLE \"$POSTGRES_USER\" WITH LOGIN PASSWORD '\''$escaped_password'\'';"
+                -v role_password="$PGPASSWORD" \
+                -tAc "SELECT format('CREATE ROLE %I WITH LOGIN PASSWORD %L', :'role_name', :'role_password');" |
+                psql -v ON_ERROR_STOP=1 \
+                  -U "$ADMIN_USER" \
+                  -d "$POSTGRES_DB"
               echo "created role $POSTGRES_USER"
             fi
 
@@ -148,22 +153,39 @@
             if database_exists; then
               echo "database $APP_DB_NAME already exists"
             else
-              createdb -U "$ADMIN_USER" -O "$POSTGRES_USER" "$APP_DB_NAME"
+              psql -v ON_ERROR_STOP=1 \
+                -U "$ADMIN_USER" \
+                -d "$POSTGRES_DB" \
+                -v app_db="$APP_DB_NAME" \
+                -v owner_role="$POSTGRES_USER" \
+                -tAc "SELECT format('CREATE DATABASE %I OWNER %I', :'app_db', :'owner_role');" |
+                psql -v ON_ERROR_STOP=1 \
+                  -U "$ADMIN_USER" \
+                  -d "$POSTGRES_DB"
               echo "created database $APP_DB_NAME"
             fi
 
             psql -v ON_ERROR_STOP=1 \
               -U "$ADMIN_USER" \
-              -d "$APP_DB_NAME" \
-              -c "GRANT ALL PRIVILEGES ON DATABASE \"$APP_DB_NAME\" TO \"$POSTGRES_USER\";"
+              -d "$POSTGRES_DB" \
+              -v app_db="$APP_DB_NAME" \
+              -v role_name="$POSTGRES_USER" \
+              -tAc "SELECT format('GRANT ALL PRIVILEGES ON DATABASE %I TO %I', :'app_db', :'role_name');" |
+              psql -v ON_ERROR_STOP=1 \
+                -U "$ADMIN_USER" \
+                -d "$POSTGRES_DB"
 
             psql -v ON_ERROR_STOP=1 \
               -U "$ADMIN_USER" \
               -d "$APP_DB_NAME" \
-              -c "GRANT ALL ON SCHEMA public TO \"$POSTGRES_USER\";"
+              -v role_name="$POSTGRES_USER" \
+              -tAc "SELECT format('GRANT ALL ON SCHEMA public TO %I', :'role_name');" |
+              psql -v ON_ERROR_STOP=1 \
+                -U "$ADMIN_USER" \
+                -d "$APP_DB_NAME"
 
             database_exists
-          '
+        POSTGRES_PROVISION
       environment:
         PGPASSWORD: "{{ postgres_database_password }}"
         POSTGRES_USER: "{{ postgres_database_user }}"

@@ -15,6 +15,7 @@
     group: root
     mode: "0644"
   notify: Restart Docker
+  when: docker_maintenance_configure_daemon | default(true) | bool
 
 - name: Collect disk usage before Docker maintenance
   command: df -h / /var/lib/docker
@@ -40,6 +41,11 @@
   command: docker system prune -af
   register: docker_system_prune
   changed_when: "'Total reclaimed space' in docker_system_prune.stdout"
+
+- name: Remove unused Docker images explicitly
+  command: docker image prune -af
+  register: docker_image_prune
+  changed_when: "'Total reclaimed space' in docker_image_prune.stdout"
 
 - name: Remove unused Docker build cache
   command: docker builder prune -af

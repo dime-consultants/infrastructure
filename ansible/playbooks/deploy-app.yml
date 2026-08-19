@@ -3,6 +3,7 @@
   hosts: "{{ target_server }}"
   become: yes
   vars_files:
+    - ../data/common.yml
     - ../data/shared-services.yml
   vars:
     requested_app_identifiers:
@@ -40,6 +41,11 @@
     - name: Resolve application directory
       set_fact:
         app_dir: "/opt/{{ deployment_app.name }}/{{ env }}"
+
+    - name: Pre-deploy Docker maintenance and disk check
+      include_tasks: ../tasks/configure-docker-maintenance.yml
+      vars:
+        docker_maintenance_configure_daemon: false
 
     - name: Resolve Postgres subscription
       set_fact:
@@ -152,14 +158,7 @@
       register: compose_output
       changed_when: true
 
-    - name: Post-deploy cleanup – remove unused Docker data
-      ansible.builtin.command: >
-        docker system prune -af
-      register: docker_prune_output
-      changed_when: "'Total reclaimed space' in docker_prune_output.stdout"
-
-    - name: Post-deploy cleanup – remove Docker build cache
-      ansible.builtin.command: >
-        docker builder prune -af
-      register: docker_builder_prune_output
-      changed_when: "'Total reclaimed space' in docker_builder_prune_output.stdout"
+    - name: Post-deploy Docker maintenance and disk check
+      include_tasks: ../tasks/configure-docker-maintenance.yml
+      vars:
+        docker_maintenance_configure_daemon: false
