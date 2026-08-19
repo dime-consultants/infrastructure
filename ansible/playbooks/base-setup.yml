@@ -17,6 +17,9 @@
     - name: Gather facts
       setup:
 
+    - name: Gather service facts
+      service_facts:
+
   tasks:
     - name: Remove previously managed Docker apt repository
       file:
@@ -240,6 +243,11 @@
     - name: Restart Fail2Ban
       service:
         name: fail2ban
+        state: restarted
+
+    - name: Restart SSH
+      service:
+        name: "{{ 'ssh' if 'ssh.service' in ansible_facts.services else 'sshd' }}"
         state: restarted
 
     - name: Restart Docker

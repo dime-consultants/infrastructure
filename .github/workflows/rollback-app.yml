@@ -67,6 +67,9 @@ jobs:
   rollback:
     needs: generate-matrix
     runs-on: ubuntu-latest
+    concurrency:
+      group: server-${{ matrix.server }}
+      cancel-in-progress: false
     strategy:
       matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
       fail-fast: false

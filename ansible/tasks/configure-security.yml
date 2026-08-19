@@ -18,6 +18,14 @@
   when: security_baseline.fail2ban | default(true) | bool
   notify: Restart Fail2Ban
 
+- name: Configure sshd startup connection limits
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?MaxStartups\s+'
+    line: "MaxStartups {{ security_baseline.sshd_max_startups | default('20:30:100') }}"
+    validate: sshd -t -f %s
+  notify: Restart SSH
+
 - name: Ensure Fail2Ban is enabled
   service:
     name: fail2ban
