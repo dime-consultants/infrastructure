@@ -14,8 +14,12 @@
         state: absent
 
     - name: Update apt cache
-      apt:
-        update_cache: yes
+      command: apt-get update
+      register: apt_update_result
+      changed_when: false
+      retries: 5
+      delay: 10
+      until: apt_update_result.rc == 0
 
     - name: Resolve Docker apt repository settings
       set_fact:
@@ -38,7 +42,6 @@
           - curl
           - gnupg
         state: present
-        update_cache: yes
 
     - name: Create directory for Docker GPG key
       file:
@@ -64,7 +67,14 @@
           https://download.docker.com/linux/{{ docker_apt_platform }} {{ ansible_distribution_release }} stable
         state: present
         filename: docker
-        update_cache: yes
+
+    - name: Update apt cache after adding Docker repository
+      command: apt-get update
+      register: docker_apt_update_result
+      changed_when: false
+      retries: 5
+      delay: 10
+      until: docker_apt_update_result.rc == 0
 
     - name: Install Docker Engine and Compose plugin
       apt:
@@ -75,7 +85,6 @@
           - docker-buildx-plugin
           - docker-compose-plugin
         state: present
-        update_cache: yes
 
     - name: Ensure Docker service is started and enabled
       service:

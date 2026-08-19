@@ -33,6 +33,11 @@ Create `ansible/data/servers/<server>.yml` with:
 The inventory and GitHub Actions matrix discover enabled server files
 automatically.
 
+GitHub Actions runs Ansible from Python 3.12. Remote hosts use Ansible's
+interpreter discovery by default. Only set `ansible_python_interpreter`, for
+example `/usr/bin/python3.12`, when that interpreter is already installed on the
+target host.
+
 ## Adding An App
 
 Add the app under the target server's `apps` list:
