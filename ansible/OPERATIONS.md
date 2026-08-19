@@ -79,10 +79,15 @@ Server-specific Docker maintenance can also cap journal disk usage during base
 setup and app deployments:
 
 ```yaml
+docker_setup_enabled: false
 docker_maintenance:
   cleanup_min_disk_use_percent: 88
   journal_vacuum_size: 300M
 ```
+
+Use `docker_setup_enabled: false` for hosts where Docker is already installed
+and base configuration should skip Docker repository, package, service, and
+maintenance tasks.
 
 App deployments run heavy Docker maintenance only when disk usage reaches
 `cleanup_min_disk_use_percent`, and post-deploy maintenance is off by default.

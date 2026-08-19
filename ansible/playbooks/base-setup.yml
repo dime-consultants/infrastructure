@@ -28,6 +28,7 @@
       loop:
         - /etc/apt/sources.list.d/docker.list
         - /etc/apt/sources.list.d/docker.sources
+      when: docker_setup_enabled | default(true) | bool
 
     - name: Update apt cache
       command: apt-get update
@@ -44,12 +45,14 @@
           {{ 'amd64' if ansible_facts['architecture'] == 'x86_64' else
              'arm64' if ansible_facts['architecture'] in ['aarch64', 'arm64'] else
              ansible_facts['architecture'] }}
+      when: docker_setup_enabled | default(true) | bool
 
     - name: Validate Docker apt repository platform
       assert:
         that:
           - docker_apt_platform in ['debian', 'ubuntu']
         fail_msg: "Docker apt repository setup supports Debian and Ubuntu, not {{ ansible_facts['distribution'] }}."
+      when: docker_setup_enabled | default(true) | bool
 
     - name: Install dependencies for adding Docker repo
       apt:
@@ -58,23 +61,27 @@
           - curl
           - gnupg
         state: present
+      when: docker_setup_enabled | default(true) | bool
 
     - name: Create directory for Docker GPG key
       file:
         path: /etc/apt/keyrings
         state: directory
         mode: '0755'
+      when: docker_setup_enabled | default(true) | bool
 
     - name: Download Docker official GPG key
       get_url:
         url: "https://download.docker.com/linux/{{ docker_apt_platform }}/gpg"
         dest: /etc/apt/keyrings/docker.asc
         mode: '0644'
+      when: docker_setup_enabled | default(true) | bool
 
     - name: Set permissions on Docker GPG key
       file:
         path: /etc/apt/keyrings/docker.asc
         mode: '0644'
+      when: docker_setup_enabled | default(true) | bool
 
     - name: Add Docker official repository
       copy:
@@ -89,6 +96,7 @@
           Components: stable
           Architectures: {{ docker_apt_arch }}
           Signed-By: /etc/apt/keyrings/docker.asc
+      when: docker_setup_enabled | default(true) | bool
 
     - name: Update apt cache after adding Docker repository
       command: apt-get update
@@ -97,6 +105,7 @@
       retries: 5
       delay: 10
       until: docker_apt_update_result.rc == 0
+      when: docker_setup_enabled | default(true) | bool
 
     - name: Install Docker Engine and Compose plugin
       apt:
@@ -107,21 +116,25 @@
           - docker-buildx-plugin
           - docker-compose-plugin
         state: present
+      when: docker_setup_enabled | default(true) | bool
 
     - name: Ensure Docker service is started and enabled
       service:
         name: docker
         state: started
         enabled: yes
+      when: docker_setup_enabled | default(true) | bool
 
     - name: Configure Docker maintenance and reclaim disk space
       include_tasks: ../tasks/configure-docker-maintenance.yml
+      when: docker_setup_enabled | default(true) | bool
 
     - name: Add current user to docker group
       user:
         name: "{{ ansible_user | default('ubuntu') }}"
         groups: docker
         append: yes
+      when: docker_setup_enabled | default(true) | bool
 
     - name: Install common packages
       apt:
