@@ -94,8 +94,6 @@
         pull: always
         recreate: auto
         remove_orphans: true
-        wait: true
-        wait_timeout: 300
   rescue:
     - name: Show shared service container status
       command: >
