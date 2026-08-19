@@ -54,7 +54,7 @@ apps:
     environments:
       prod:
         domain: invoicing.dimeconsultants.africa
-        port: 6000
+        port: 8000
       stage:
         domain: stage-invoicing.dimeconsultants.africa
         port: 6001
