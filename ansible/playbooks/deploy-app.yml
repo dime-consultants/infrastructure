@@ -47,11 +47,6 @@
       vars:
         docker_maintenance_configure_daemon: false
 
-    - name: Resolve Postgres subscription
-      set_fact:
-        postgres_subscription: "{{ shared_services | default([]) | selectattr('name', 'equalto', 'postgres') | first | default({}) }}"
-      when: deployment_app_env.postgres_database is defined
-
     - name: Validate Postgres shared service catalog
       assert:
         that:
@@ -59,47 +54,11 @@
         fail_msg: "Shared service catalog has no postgres:{{ env }} config required by {{ deployment_app.name }}."
       when: deployment_app_env.postgres_database is defined
 
-    - name: Provision app Postgres database
-      include_tasks: ../tasks/provision-postgres-database.yml
-      vars:
-        shared_service_name: postgres
-        shared_service_env: "{{ env }}"
-        shared_service_env_config: "{{ shared_service_catalog.postgres.environments[env] }}"
-        postgres_app: "{{ deployment_app }}"
-        postgres_app_env: "{{ deployment_app_env }}"
-        postgres_secret_names: >-
-          {{
-            (postgres_subscription.environments | default({}))
-            .get(env, {})
-            .get('secret_names', shared_service_catalog.postgres.environments[env].secret_names | default({}))
-          }}
-      when: deployment_app_env.postgres_database is defined
-
-    - name: Resolve RabbitMQ subscription
-      set_fact:
-        rabbitmq_subscription: "{{ shared_services | default([]) | selectattr('name', 'equalto', 'rabbitmq') | first | default({}) }}"
-      when: deployment_app_env.rabbitmq_namespace is defined
-
     - name: Validate RabbitMQ shared service catalog
       assert:
         that:
           - env in shared_service_catalog.rabbitmq.environments
         fail_msg: "Shared service catalog has no rabbitmq:{{ env }} config required by {{ deployment_app.name }}."
-      when: deployment_app_env.rabbitmq_namespace is defined
-
-    - name: Provision app RabbitMQ namespace
-      include_tasks: ../tasks/provision-rabbitmq-namespace.yml
-      vars:
-        shared_service_name: rabbitmq
-        shared_service_env: "{{ env }}"
-        rabbitmq_app: "{{ deployment_app }}"
-        rabbitmq_app_env: "{{ deployment_app_env }}"
-        rabbitmq_secret_names: >-
-          {{
-            (rabbitmq_subscription.environments | default({}))
-            .get(env, {})
-            .get('secret_names', shared_service_catalog.rabbitmq.environments[env].secret_names | default({}))
-          }}
       when: deployment_app_env.rabbitmq_namespace is defined
 
     - name: Create application directory

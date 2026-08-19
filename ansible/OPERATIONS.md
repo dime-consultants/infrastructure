@@ -68,6 +68,12 @@ ports:
   - "${API_PORT}:8000"
 ```
 
+App deployments do not create or mutate Postgres databases or RabbitMQ vhosts on
+every run. The deploy pipeline injects connection settings from the infra
+catalog, and shared service containers are managed by base/shared-service
+playbooks. Create application databases and RabbitMQ vhosts explicitly when
+introducing a new app or changing credentials.
+
 ## Backups
 
 Backups are opt-in per server:

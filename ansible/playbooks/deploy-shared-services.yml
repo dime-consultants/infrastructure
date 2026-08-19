@@ -18,6 +18,3 @@
 
     - name: Stop unsubscribed shared services
       include_tasks: ../tasks/cleanup-unsubscribed-shared-services.yml
-
-    - name: Provision app databases and broker namespaces
-      include_tasks: ../tasks/provision-app-shared-dependencies.yml
