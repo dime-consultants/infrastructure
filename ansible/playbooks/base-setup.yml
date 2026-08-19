@@ -152,9 +152,11 @@
         label: "{{ shared_service_subscription_item.name }}"
       vars:
         shared_service_subscription: "{{ shared_service_subscription_item }}"
+      when: shared_services_deploy_enabled | default(true) | bool
 
     - name: Stop unsubscribed shared services
       include_tasks: ../tasks/cleanup-unsubscribed-shared-services.yml
+      when: shared_services_deploy_enabled | default(true) | bool
 
     - name: Configure backups
       include_tasks: ../tasks/configure-backups.yml

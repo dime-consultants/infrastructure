@@ -76,7 +76,6 @@ jobs:
   configure:
     needs: generate-matrix
     runs-on: ubuntu-latest
-    timeout-minutes: 10
     concurrency:
       group: server-${{ matrix.server }}
       cancel-in-progress: false

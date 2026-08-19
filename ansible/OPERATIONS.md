@@ -80,6 +80,7 @@ setup and app deployments:
 
 ```yaml
 docker_setup_enabled: false
+shared_services_deploy_enabled: false
 docker_maintenance:
   cleanup_min_disk_use_percent: 88
   journal_vacuum_size: 300M
@@ -87,7 +88,9 @@ docker_maintenance:
 
 Use `docker_setup_enabled: false` for hosts where Docker is already installed
 and base configuration should skip Docker repository, package, service, and
-maintenance tasks.
+maintenance tasks. Use `shared_services_deploy_enabled: false` when shared
+services are already managed separately and base configuration should skip
+shared-service deploy and cleanup tasks.
 
 App deployments run heavy Docker maintenance only when disk usage reaches
 `cleanup_min_disk_use_percent`, and post-deploy maintenance is off by default.

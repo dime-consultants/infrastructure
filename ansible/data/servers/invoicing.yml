@@ -12,6 +12,7 @@ ansible_ssh_common_args: >-
   -o ServerAliveInterval=30
   -o ServerAliveCountMax=2
 docker_setup_enabled: false
+shared_services_deploy_enabled: false
 
 firewall_extra_ports: []
 
