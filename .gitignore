@@ -1,2 +1,10 @@
 .idea
 idea
+*.pem
+*.key
+*.p12
+*.pfx
+*.env
+*.env.*
+secrets.txt
+sectets.txt

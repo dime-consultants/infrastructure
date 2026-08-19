@@ -1,0 +1,5 @@
+skip-dirs:
+  - .git
+  - .idea
+  - .cache
+  - ansible/inventory/__pycache__
