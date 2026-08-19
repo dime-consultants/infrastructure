@@ -7,6 +7,12 @@
     postgres_admin_database: "{{ shared_service_env_config.database | default('postgres') }}"
     postgres_shared_project_dir: "{{ shared_service_base_dir }}/{{ shared_service_name }}/{{ shared_service_env }}"
     postgres_shared_project_name: "shared_{{ shared_service_name }}_{{ shared_service_env }}"
+    postgres_service_subscription: >-
+      {{
+        app_postgres_subscription
+        | default(postgres_subscription
+        | default({'name': 'postgres', 'environments': {}}))
+      }}
 
 - name: Validate Postgres database credentials
   assert:
@@ -17,60 +23,120 @@
       - postgres_admin_database | length > 0
     fail_msg: "Missing Postgres config or GitHub Secrets for {{ postgres_app.name }}:{{ shared_service_env }}."
 
+- name: Ensure Postgres shared service is present before provisioning
+  include_tasks: deploy-shared-service.yml
+  vars:
+    shared_service_subscription: "{{ postgres_service_subscription }}"
+
 - name: Provision Postgres database
-  ansible.builtin.shell: |
-    set -eu
+  block:
+    - name: Create or verify Postgres database
+      ansible.builtin.shell: |
+        set -eu
 
-    POSTGRES_CONTAINER="$(
-      docker compose \
-        --project-directory "{{ postgres_shared_project_dir }}" \
-        -p "{{ postgres_shared_project_name }}" \
-        -f "{{ postgres_shared_project_dir }}/docker-compose.yml" \
-        ps -q postgres
-    )"
+        POSTGRES_CONTAINER="$(
+          docker compose \
+            --project-directory "{{ postgres_shared_project_dir }}" \
+            -p "{{ postgres_shared_project_name }}" \
+            -f "{{ postgres_shared_project_dir }}/docker-compose.yml" \
+            ps -q postgres
+        )"
 
-    if [ -z "$POSTGRES_CONTAINER" ]; then
-      echo "Postgres shared service container not found for {{ postgres_shared_project_name }}" >&2
-      exit 1
-    fi
-
-    docker exec \
-      -e PGPASSWORD \
-      -e POSTGRES_USER \
-      -e POSTGRES_DB \
-      -e APP_DB_NAME \
-      "$POSTGRES_CONTAINER" \
-      sh -ec '
-        echo "provisioning database $APP_DB_NAME using admin database $POSTGRES_DB"
-
-        database_exists() {
-          printf "%s\n" "SELECT 1 FROM pg_database WHERE datname = :'\'app_db\'';" |
-            psql -v ON_ERROR_STOP=1 \
-              -U "$POSTGRES_USER" \
-              -d "$POSTGRES_DB" \
-              -v app_db="$APP_DB_NAME" \
-              -tA |
-            grep -qx 1
-        }
-
-        if database_exists; then
-          echo "database $APP_DB_NAME already exists"
-        else
-          createdb -U "$POSTGRES_USER" -O "$POSTGRES_USER" "$APP_DB_NAME"
-          echo "created database $APP_DB_NAME"
+        if [ -z "$POSTGRES_CONTAINER" ]; then
+          echo "Postgres shared service container not found for {{ postgres_shared_project_name }}" >&2
+          exit 1
         fi
 
-        psql -v ON_ERROR_STOP=1 \
-          -U "$POSTGRES_USER" \
-          -d "$APP_DB_NAME" \
-          -c "GRANT ALL ON SCHEMA public TO \"$POSTGRES_USER\";"
+        if [ "$(docker inspect -f '{{ "{{" }}.State.Running{{ "}}" }}' "$POSTGRES_CONTAINER")" != "true" ]; then
+          echo "Postgres container $POSTGRES_CONTAINER is not running" >&2
+          exit 1
+        fi
 
-        database_exists
-      '
-  environment:
-    PGPASSWORD: "{{ postgres_database_password }}"
-    POSTGRES_USER: "{{ postgres_database_user }}"
-    POSTGRES_DB: "{{ postgres_admin_database }}"
-    APP_DB_NAME: "{{ postgres_database_name }}"
-  register: postgres_database_provision
-  changed_when: true
+        for attempt in 1 2 3 4 5 6 7 8 9 10; do
+          if docker exec "$POSTGRES_CONTAINER" pg_isready -h 127.0.0.1 -p 5432 >/dev/null 2>&1; then
+            break
+          fi
+          if [ "$attempt" = "10" ]; then
+            echo "Postgres did not become ready after $attempt attempts" >&2
+            exit 1
+          fi
+          sleep 3
+        done
+
+        docker exec \
+          -e PGPASSWORD \
+          -e POSTGRES_USER \
+          -e POSTGRES_DB \
+          -e APP_DB_NAME \
+          "$POSTGRES_CONTAINER" \
+          sh -ec '
+            echo "provisioning database $APP_DB_NAME using admin database $POSTGRES_DB"
+
+            database_exists() {
+              printf "%s\n" "SELECT 1 FROM pg_database WHERE datname = :'\'app_db\'';" |
+                psql -v ON_ERROR_STOP=1 \
+                  -U "$POSTGRES_USER" \
+                  -d "$POSTGRES_DB" \
+                  -v app_db="$APP_DB_NAME" \
+                  -tA |
+                grep -qx 1
+            }
+
+            if database_exists; then
+              echo "database $APP_DB_NAME already exists"
+            else
+              createdb -U "$POSTGRES_USER" -O "$POSTGRES_USER" "$APP_DB_NAME"
+              echo "created database $APP_DB_NAME"
+            fi
+
+            psql -v ON_ERROR_STOP=1 \
+              -U "$POSTGRES_USER" \
+              -d "$APP_DB_NAME" \
+              -c "GRANT ALL ON SCHEMA public TO \"$POSTGRES_USER\";"
+
+            database_exists
+          '
+      environment:
+        PGPASSWORD: "{{ postgres_database_password }}"
+        POSTGRES_USER: "{{ postgres_database_user }}"
+        POSTGRES_DB: "{{ postgres_admin_database }}"
+        APP_DB_NAME: "{{ postgres_database_name }}"
+      register: postgres_database_provision
+      changed_when: "'created database' in postgres_database_provision.stdout"
+      retries: 3
+      delay: 5
+      until: postgres_database_provision.rc == 0
+  rescue:
+    - name: Show Postgres shared service status
+      command: >
+        docker compose
+        --project-directory {{ postgres_shared_project_dir }}
+        -p {{ postgres_shared_project_name }}
+        -f {{ postgres_shared_project_dir }}/docker-compose.yml
+        ps
+      register: postgres_provision_ps
+      changed_when: false
+      failed_when: false
+
+    - name: Show Postgres shared service logs
+      command: >
+        docker compose
+        --project-directory {{ postgres_shared_project_dir }}
+        -p {{ postgres_shared_project_name }}
+        -f {{ postgres_shared_project_dir }}/docker-compose.yml
+        logs --tail=100 --no-color postgres
+      register: postgres_provision_logs
+      changed_when: false
+      failed_when: false
+
+    - name: Print Postgres provisioning diagnostics
+      debug:
+        msg:
+          - "docker compose ps:"
+          - "{{ postgres_provision_ps.stdout_lines | default([]) }}"
+          - "docker compose logs --tail=100 postgres:"
+          - "{{ postgres_provision_logs.stdout_lines | default([]) }}"
+
+    - name: Fail Postgres provisioning
+      fail:
+        msg: "Could not provision database {{ postgres_database_name }} for {{ postgres_app.name }}:{{ shared_service_env }}."

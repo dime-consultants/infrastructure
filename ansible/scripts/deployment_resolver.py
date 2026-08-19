@@ -128,10 +128,7 @@ def subscribed_environment(server, service_name, env_name):
             return environments[env_name] or {}
         if isinstance(environments, list) and env_name in environments:
             return {}
-    fail(
-        f"{server.get('server_name')} must subscribe to shared service "
-        f"{service_name}:{env_name}"
-    )
+    return {}
 
 
 def service_env_config(shared_service_catalog, service_name, env_name):

@@ -30,14 +30,11 @@
         postgres_subscription: "{{ shared_services | default([]) | selectattr('name', 'equalto', 'postgres') | first | default({}) }}"
       when: deployment_app_env.postgres_database is defined
 
-    - name: Validate Postgres shared service subscription
+    - name: Validate Postgres shared service catalog
       assert:
         that:
-          - postgres_subscription.environments is defined
-          - postgres_subscription.environments is mapping
-          - env in postgres_subscription.environments
           - env in shared_service_catalog.postgres.environments
-        fail_msg: "{{ target_server }} must subscribe to postgres:{{ env }} before deploying {{ deployment_app.name }}."
+        fail_msg: "Shared service catalog has no postgres:{{ env }} config required by {{ deployment_app.name }}."
       when: deployment_app_env.postgres_database is defined
 
     - name: Provision app Postgres database
@@ -48,7 +45,12 @@
         shared_service_env_config: "{{ shared_service_catalog.postgres.environments[env] }}"
         postgres_app: "{{ deployment_app }}"
         postgres_app_env: "{{ deployment_app_env }}"
-        postgres_secret_names: "{{ postgres_subscription.environments[env].secret_names | default(shared_service_catalog.postgres.environments[env].secret_names | default({})) }}"
+        postgres_secret_names: >-
+          {{
+            (postgres_subscription.environments | default({}))
+            .get(env, {})
+            .get('secret_names', shared_service_catalog.postgres.environments[env].secret_names | default({}))
+          }}
       when: deployment_app_env.postgres_database is defined
 
     - name: Resolve RabbitMQ subscription
@@ -56,14 +58,11 @@
         rabbitmq_subscription: "{{ shared_services | default([]) | selectattr('name', 'equalto', 'rabbitmq') | first | default({}) }}"
       when: deployment_app_env.rabbitmq_namespace is defined
 
-    - name: Validate RabbitMQ shared service subscription
+    - name: Validate RabbitMQ shared service catalog
       assert:
         that:
-          - rabbitmq_subscription.environments is defined
-          - rabbitmq_subscription.environments is mapping
-          - env in rabbitmq_subscription.environments
           - env in shared_service_catalog.rabbitmq.environments
-        fail_msg: "{{ target_server }} must subscribe to rabbitmq:{{ env }} before deploying {{ deployment_app.name }}."
+        fail_msg: "Shared service catalog has no rabbitmq:{{ env }} config required by {{ deployment_app.name }}."
       when: deployment_app_env.rabbitmq_namespace is defined
 
     - name: Provision app RabbitMQ namespace
@@ -73,7 +72,12 @@
         shared_service_env: "{{ env }}"
         rabbitmq_app: "{{ deployment_app }}"
         rabbitmq_app_env: "{{ deployment_app_env }}"
-        rabbitmq_secret_names: "{{ rabbitmq_subscription.environments[env].secret_names | default(shared_service_catalog.rabbitmq.environments[env].secret_names | default({})) }}"
+        rabbitmq_secret_names: >-
+          {{
+            (rabbitmq_subscription.environments | default({}))
+            .get(env, {})
+            .get('secret_names', shared_service_catalog.rabbitmq.environments[env].secret_names | default({}))
+          }}
       when: deployment_app_env.rabbitmq_namespace is defined
 
     - name: Create application directory

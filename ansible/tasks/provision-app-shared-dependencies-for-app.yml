@@ -1,14 +1,11 @@
 ---
-- name: Validate Postgres subscription for app environment
+- name: Validate Postgres catalog for app environment
   assert:
     that:
-      - app_postgres_subscription.environments is defined
-      - app_postgres_subscription.environments is mapping
-      - shared_dependency_app_env_item.key in app_postgres_subscription.environments
       - shared_dependency_app_env_item.key in shared_service_catalog.postgres.environments
     fail_msg: >-
-      {{ inventory_hostname }} must subscribe to postgres:{{ shared_dependency_app_env_item.key }}
-      because {{ shared_dependency_app.name }} declares postgres_database.
+      Shared service catalog has no postgres:{{ shared_dependency_app_env_item.key }}
+      config required by {{ shared_dependency_app.name }}.
   loop: "{{ shared_dependency_app.environments | default({}) | dict2items }}"
   loop_control:
     loop_var: shared_dependency_app_env_item
@@ -27,19 +24,24 @@
     shared_service_env_config: "{{ shared_service_catalog.postgres.environments[shared_dependency_app_env_item.key] }}"
     postgres_app: "{{ shared_dependency_app }}"
     postgres_app_env: "{{ shared_dependency_app | combine(shared_dependency_app_env_item.value, recursive=True) }}"
-    postgres_secret_names: "{{ app_postgres_subscription.environments[shared_dependency_app_env_item.key].secret_names | default(shared_service_catalog.postgres.environments[shared_dependency_app_env_item.key].secret_names | default({})) }}"
+    postgres_secret_names: >-
+      {{
+        (app_postgres_subscription.environments | default({}))
+        .get(shared_dependency_app_env_item.key, {})
+        .get(
+          'secret_names',
+          shared_service_catalog.postgres.environments[shared_dependency_app_env_item.key].secret_names | default({})
+        )
+      }}
   when: (shared_dependency_app | combine(shared_dependency_app_env_item.value, recursive=True)).postgres_database is defined
 
-- name: Validate RabbitMQ subscription for app environment
+- name: Validate RabbitMQ catalog for app environment
   assert:
     that:
-      - app_rabbitmq_subscription.environments is defined
-      - app_rabbitmq_subscription.environments is mapping
-      - shared_dependency_app_env_item.key in app_rabbitmq_subscription.environments
       - shared_dependency_app_env_item.key in shared_service_catalog.rabbitmq.environments
     fail_msg: >-
-      {{ inventory_hostname }} must subscribe to rabbitmq:{{ shared_dependency_app_env_item.key }}
-      because {{ shared_dependency_app.name }} declares rabbitmq_namespace.
+      Shared service catalog has no rabbitmq:{{ shared_dependency_app_env_item.key }}
+      config required by {{ shared_dependency_app.name }}.
   loop: "{{ shared_dependency_app.environments | default({}) | dict2items }}"
   loop_control:
     loop_var: shared_dependency_app_env_item
@@ -57,5 +59,13 @@
     shared_service_env: "{{ shared_dependency_app_env_item.key }}"
     rabbitmq_app: "{{ shared_dependency_app }}"
     rabbitmq_app_env: "{{ shared_dependency_app | combine(shared_dependency_app_env_item.value, recursive=True) }}"
-    rabbitmq_secret_names: "{{ app_rabbitmq_subscription.environments[shared_dependency_app_env_item.key].secret_names | default(shared_service_catalog.rabbitmq.environments[shared_dependency_app_env_item.key].secret_names | default({})) }}"
+    rabbitmq_secret_names: >-
+      {{
+        (app_rabbitmq_subscription.environments | default({}))
+        .get(shared_dependency_app_env_item.key, {})
+        .get(
+          'secret_names',
+          shared_service_catalog.rabbitmq.environments[shared_dependency_app_env_item.key].secret_names | default({})
+        )
+      }}
   when: (shared_dependency_app | combine(shared_dependency_app_env_item.value, recursive=True)).rabbitmq_namespace is defined

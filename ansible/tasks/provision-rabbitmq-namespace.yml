@@ -6,6 +6,12 @@
     rabbitmq_password: "{{ lookup('env', rabbitmq_secret_names.password) }}"
     rabbitmq_shared_project_dir: "{{ shared_service_base_dir }}/{{ shared_service_name }}/{{ shared_service_env }}"
     rabbitmq_shared_project_name: "shared_{{ shared_service_name }}_{{ shared_service_env }}"
+    rabbitmq_service_subscription: >-
+      {{
+        app_rabbitmq_subscription
+        | default(rabbitmq_subscription
+        | default({'name': 'rabbitmq', 'environments': {}}))
+      }}
 
 - name: Validate RabbitMQ namespace credentials
   assert:
@@ -15,40 +21,101 @@
       - rabbitmq_password | length > 0
     fail_msg: "Missing RabbitMQ config or GitHub Secrets for {{ rabbitmq_app.name }}:{{ shared_service_env }}."
 
+- name: Ensure RabbitMQ shared service is present before provisioning
+  include_tasks: deploy-shared-service.yml
+  vars:
+    shared_service_subscription: "{{ rabbitmq_service_subscription }}"
+
 - name: Provision RabbitMQ namespace
-  ansible.builtin.shell: |
-    set -eu
+  block:
+    - name: Create or verify RabbitMQ namespace
+      ansible.builtin.shell: |
+        set -eu
 
-    RABBITMQ_CONTAINER="$(
-      docker compose \
-        --project-directory "{{ rabbitmq_shared_project_dir }}" \
-        -p "{{ rabbitmq_shared_project_name }}" \
-        -f "{{ rabbitmq_shared_project_dir }}/docker-compose.yml" \
-        ps -q rabbitmq
-    )"
+        RABBITMQ_CONTAINER="$(
+          docker compose \
+            --project-directory "{{ rabbitmq_shared_project_dir }}" \
+            -p "{{ rabbitmq_shared_project_name }}" \
+            -f "{{ rabbitmq_shared_project_dir }}/docker-compose.yml" \
+            ps -q rabbitmq
+        )"
 
-    if [ -z "$RABBITMQ_CONTAINER" ]; then
-      echo "RabbitMQ shared service container not found for {{ rabbitmq_shared_project_name }}" >&2
-      exit 1
-    fi
-
-    docker exec \
-      -e RABBITMQ_NAMESPACE \
-      -e RABBITMQ_USERNAME \
-      "$RABBITMQ_CONTAINER" \
-      sh -ec '
-        if rabbitmqctl list_vhosts --silent | grep -Fx "$RABBITMQ_NAMESPACE" >/dev/null; then
-          echo "RabbitMQ vhost $RABBITMQ_NAMESPACE already exists"
-        else
-          rabbitmqctl add_vhost "$RABBITMQ_NAMESPACE"
-          echo "created RabbitMQ vhost $RABBITMQ_NAMESPACE"
+        if [ -z "$RABBITMQ_CONTAINER" ]; then
+          echo "RabbitMQ shared service container not found for {{ rabbitmq_shared_project_name }}" >&2
+          exit 1
         fi
 
-        rabbitmqctl set_permissions -p "$RABBITMQ_NAMESPACE" "$RABBITMQ_USERNAME" ".*" ".*" ".*"
-        rabbitmqctl list_vhosts --silent | grep -Fx "$RABBITMQ_NAMESPACE"
-      '
-  environment:
-    RABBITMQ_NAMESPACE: "{{ rabbitmq_namespace }}"
-    RABBITMQ_USERNAME: "{{ rabbitmq_username }}"
-    RABBITMQ_PASSWORD: "{{ rabbitmq_password }}"
-  changed_when: true
+        if [ "$(docker inspect -f '{{ "{{" }}.State.Running{{ "}}" }}' "$RABBITMQ_CONTAINER")" != "true" ]; then
+          echo "RabbitMQ container $RABBITMQ_CONTAINER is not running" >&2
+          exit 1
+        fi
+
+        for attempt in 1 2 3 4 5 6 7 8 9 10; do
+          if docker exec "$RABBITMQ_CONTAINER" rabbitmq-diagnostics -q ping >/dev/null 2>&1; then
+            break
+          fi
+          if [ "$attempt" = "10" ]; then
+            echo "RabbitMQ did not become ready after $attempt attempts" >&2
+            exit 1
+          fi
+          sleep 3
+        done
+
+        docker exec \
+          -e RABBITMQ_NAMESPACE \
+          -e RABBITMQ_USERNAME \
+          "$RABBITMQ_CONTAINER" \
+          sh -ec '
+            if rabbitmqctl list_vhosts --silent | grep -Fx "$RABBITMQ_NAMESPACE" >/dev/null; then
+              echo "RabbitMQ vhost $RABBITMQ_NAMESPACE already exists"
+            else
+              rabbitmqctl add_vhost "$RABBITMQ_NAMESPACE"
+              echo "created RabbitMQ vhost $RABBITMQ_NAMESPACE"
+            fi
+
+            rabbitmqctl set_permissions -p "$RABBITMQ_NAMESPACE" "$RABBITMQ_USERNAME" ".*" ".*" ".*"
+            rabbitmqctl list_vhosts --silent | grep -Fx "$RABBITMQ_NAMESPACE"
+          '
+      environment:
+        RABBITMQ_NAMESPACE: "{{ rabbitmq_namespace }}"
+        RABBITMQ_USERNAME: "{{ rabbitmq_username }}"
+        RABBITMQ_PASSWORD: "{{ rabbitmq_password }}"
+      register: rabbitmq_namespace_provision
+      changed_when: "'created RabbitMQ vhost' in rabbitmq_namespace_provision.stdout"
+      retries: 3
+      delay: 5
+      until: rabbitmq_namespace_provision.rc == 0
+  rescue:
+    - name: Show RabbitMQ shared service status
+      command: >
+        docker compose
+        --project-directory {{ rabbitmq_shared_project_dir }}
+        -p {{ rabbitmq_shared_project_name }}
+        -f {{ rabbitmq_shared_project_dir }}/docker-compose.yml
+        ps
+      register: rabbitmq_provision_ps
+      changed_when: false
+      failed_when: false
+
+    - name: Show RabbitMQ shared service logs
+      command: >
+        docker compose
+        --project-directory {{ rabbitmq_shared_project_dir }}
+        -p {{ rabbitmq_shared_project_name }}
+        -f {{ rabbitmq_shared_project_dir }}/docker-compose.yml
+        logs --tail=100 --no-color rabbitmq
+      register: rabbitmq_provision_logs
+      changed_when: false
+      failed_when: false
+
+    - name: Print RabbitMQ provisioning diagnostics
+      debug:
+        msg:
+          - "docker compose ps:"
+          - "{{ rabbitmq_provision_ps.stdout_lines | default([]) }}"
+          - "docker compose logs --tail=100 rabbitmq:"
+          - "{{ rabbitmq_provision_logs.stdout_lines | default([]) }}"
+
+    - name: Fail RabbitMQ provisioning
+      fail:
+        msg: "Could not provision RabbitMQ namespace {{ rabbitmq_namespace }} for {{ rabbitmq_app.name }}:{{ shared_service_env }}."
