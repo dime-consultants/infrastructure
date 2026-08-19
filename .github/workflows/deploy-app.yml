@@ -170,4 +170,5 @@ jobs:
             --extra-vars "env=$env" \
             --extra-vars "compose_file=/tmp/docker-compose.yml" \
             --extra-vars "env_file=/tmp/.env" \
+            --timeout 15 \
             --private-key "$KEY_FILE"

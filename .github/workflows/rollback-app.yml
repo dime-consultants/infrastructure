@@ -125,4 +125,5 @@ jobs:
             --extra-vars "app_repo=${{ inputs.app_repo }}" \
             --extra-vars "env=${{ inputs.env }}" \
             --extra-vars "force_image_tag=${{ inputs.previous_tag }}" \
+            --timeout 15 \
             --private-key <(echo "$SSH_PRIVATE_KEY")

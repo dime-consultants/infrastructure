@@ -76,6 +76,7 @@ jobs:
   configure:
     needs: generate-matrix
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     strategy:
       fail-fast: false
@@ -143,6 +144,7 @@ jobs:
             ansible/playbooks/base-setup.yml \
             --inventory ansible/inventory/dynamic_inventory.py \
             --limit "$TARGET_SERVER" \
+            --timeout 15 \
             --private-key "$KEY_FILE"
 
           rm -f "$KEY_FILE"
