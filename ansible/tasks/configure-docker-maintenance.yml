@@ -58,6 +58,13 @@
   changed_when: "'Vacuuming done' in journal_vacuum.stdout or 'Deleted archived journal' in journal_vacuum.stdout"
   failed_when: false
 
+- name: Vacuum systemd journal logs by size
+  command: "journalctl --vacuum-size={{ docker_maintenance.journal_vacuum_size }}"
+  register: journal_size_vacuum
+  changed_when: "'Vacuuming done' in journal_size_vacuum.stdout or 'Deleted archived journal' in journal_size_vacuum.stdout"
+  failed_when: false
+  when: docker_maintenance.journal_vacuum_size is defined
+
 - name: Autoremove unused apt packages
   apt:
     autoremove: yes

@@ -83,6 +83,12 @@
         group: "{{ ansible_user }}"
       when: env_file is defined
 
+    - name: Remove stale deploy artifacts
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop: "{{ deployment_app_env.remove_deploy_artifacts | default([]) }}"
+
     - name: Force image tag override (for rollback)
       lineinfile:
         path: "{{ app_dir }}/.env"

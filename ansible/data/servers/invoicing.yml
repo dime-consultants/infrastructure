@@ -5,6 +5,9 @@ public_ip_secret_name: INVOICING_PUBLIC_IP
 
 firewall_extra_ports: []
 
+docker_maintenance:
+  journal_vacuum_size: 300M
+
 shared_services:
   - name: postgres
     environments:
@@ -31,6 +34,8 @@ apps:
     port_env: API_PORT
     postgres_database: invoicing
     rabbitmq_namespace: invoicing
+    remove_deploy_artifacts:
+      - /root/tools/ai_invoicing/image.tar
     environments:
       prod:
         domain: invoicing.dimeconsultants.africa

@@ -68,6 +68,21 @@ ports:
   - "${API_PORT}:8000"
 ```
 
+Stale deployment artifacts can be removed before Compose recreates the stack:
+
+```yaml
+remove_deploy_artifacts:
+  - /root/tools/billing-api/image.tar
+```
+
+Server-specific Docker maintenance can also cap journal disk usage during base
+setup and app deployments:
+
+```yaml
+docker_maintenance:
+  journal_vacuum_size: 300M
+```
+
 App deployments do not create or mutate Postgres databases or RabbitMQ vhosts on
 every run. The deploy pipeline injects connection settings from the infra
 catalog, and shared service containers are managed by base/shared-service
