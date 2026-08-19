@@ -3,6 +3,15 @@ name: Base Server Configuration
 on:
   push:
     branches: [master]
+    paths:
+      - ".github/workflows/base-configure.yml"
+      - "ansible/data/**"
+      - "ansible/inventory/**"
+      - "ansible/playbooks/base-setup.yml"
+      - "ansible/playbooks/deploy-shared-services.yml"
+      - "ansible/shared-services/**"
+      - "ansible/tasks/**"
+      - "ansible/templates/**"
 
 jobs:
   generate-matrix:
@@ -80,13 +89,13 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: .github/requirements/deploy.txt
 
       - name: Install Ansible
         run: |
-          python -m pip install --upgrade pip
-          pip install ansible
-
-          ansible-galaxy collection install community.docker
+          pip install -r .github/requirements/deploy.txt
+          ansible-galaxy collection install 'community.docker:>3.0.0'
           ansible-galaxy collection install community.general
 
       - name: Configure server

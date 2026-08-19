@@ -2,6 +2,7 @@
 - name: Deploy or update application
   hosts: "{{ target_server }}"
   become: yes
+  gather_facts: false
   vars_files:
     - ../data/common.yml
     - ../data/shared-services.yml
@@ -10,6 +11,12 @@
       - "{{ app_repo | default('') | lower }}"
       - "{{ app_name | default('') | lower }}"
       - "{{ (app_repo | default('') | basename | regex_replace('\\.git$', '')) | lower }}"
+  pre_tasks:
+    - name: Wait for SSH to become reachable
+      wait_for_connection:
+        delay: "{{ ssh_wait_delay | default(5) }}"
+        timeout: "{{ ssh_wait_timeout | default(180) }}"
+
   tasks:
     - name: Resolve app deployment config
       set_fact:

@@ -2,10 +2,20 @@
 - name: Base server setup and Nginx config
   hosts: all
   become: yes
+  gather_facts: false
 
   vars_files:
     - ../data/common.yml
     - ../data/shared-services.yml
+
+  pre_tasks:
+    - name: Wait for SSH to become reachable
+      wait_for_connection:
+        delay: "{{ ssh_wait_delay | default(5) }}"
+        timeout: "{{ ssh_wait_timeout | default(180) }}"
+
+    - name: Gather facts
+      setup:
 
   tasks:
     - name: Remove previously managed Docker apt repository

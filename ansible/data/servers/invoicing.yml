@@ -2,6 +2,12 @@ server_name: invoicing
 ssh_secret_name: INVOICING_SSH_KEY
 ssh_user_secret_name: INVOICING_SSH_USER
 public_ip_secret_name: INVOICING_PUBLIC_IP
+ansible_timeout: 60
+ansible_ssh_common_args: >-
+  -o ConnectTimeout=30
+  -o ConnectionAttempts=3
+  -o ServerAliveInterval=30
+  -o ServerAliveCountMax=4
 
 firewall_extra_ports: []
 
