@@ -10,11 +10,6 @@ shared_services:
     environments:
       prod: {}
       stage: {}
-  - name: rabbitmq
-    environments:
-      prod:
-        domain: rabbit.dimeconsultants.africa
-      stage: {}
   - name: portainer
     environments:
       prod:
