@@ -81,16 +81,52 @@
     group: root
 
 - name: Deploy shared service
-  community.docker.docker_compose_v2:
-    project_src: "{{ shared_service_project_dir }}"
-    project_name: "shared_{{ shared_service_name }}_{{ shared_service_env }}"
-    files:
-      - docker-compose.yml
-    env_files:
-      - .env
-    state: present
-    pull: always
-    recreate: auto
-    remove_orphans: true
-    wait: true
-    wait_timeout: 300
+  block:
+    - name: Start shared service compose project
+      community.docker.docker_compose_v2:
+        project_src: "{{ shared_service_project_dir }}"
+        project_name: "shared_{{ shared_service_name }}_{{ shared_service_env }}"
+        files:
+          - docker-compose.yml
+        env_files:
+          - .env
+        state: present
+        pull: always
+        recreate: auto
+        remove_orphans: true
+        wait: true
+        wait_timeout: 300
+  rescue:
+    - name: Show shared service container status
+      command: >
+        docker compose
+        --project-directory {{ shared_service_project_dir }}
+        -p shared_{{ shared_service_name }}_{{ shared_service_env }}
+        -f {{ shared_service_project_dir }}/docker-compose.yml
+        ps
+      register: shared_service_ps
+      changed_when: false
+      failed_when: false
+
+    - name: Show shared service logs
+      command: >
+        docker compose
+        --project-directory {{ shared_service_project_dir }}
+        -p shared_{{ shared_service_name }}_{{ shared_service_env }}
+        -f {{ shared_service_project_dir }}/docker-compose.yml
+        logs --tail=100 --no-color
+      register: shared_service_logs
+      changed_when: false
+      failed_when: false
+
+    - name: Print shared service diagnostics
+      debug:
+        msg:
+          - "docker compose ps:"
+          - "{{ shared_service_ps.stdout_lines | default([]) }}"
+          - "docker compose logs --tail=100:"
+          - "{{ shared_service_logs.stdout_lines | default([]) }}"
+
+    - name: Fail shared service deployment
+      fail:
+        msg: "Shared service {{ shared_service_name }}:{{ shared_service_env }} failed to become healthy."
