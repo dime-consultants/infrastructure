@@ -101,6 +101,9 @@
         state: started
         enabled: yes
 
+    - name: Configure Docker maintenance and reclaim disk space
+      include_tasks: ../tasks/configure-docker-maintenance.yml
+
     - name: Add current user to docker group
       user:
         name: "{{ ansible_user | default('ubuntu') }}"
@@ -230,4 +233,9 @@
     - name: Restart Fail2Ban
       service:
         name: fail2ban
+        state: restarted
+
+    - name: Restart Docker
+      service:
+        name: docker
         state: restarted

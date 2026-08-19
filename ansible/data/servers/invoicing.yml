@@ -10,6 +10,10 @@ shared_services:
     environments:
       prod: {}
       stage: {}
+  - name: rabbitmq
+    environments:
+      prod: {}
+      stage: {}
   - name: portainer
     environments:
       prod:
@@ -30,6 +34,7 @@ apps:
       - stage-invoicing.dimeconsultants.africa
     port_env: API_PORT
     postgres_database: invoicing
+    rabbitmq_namespace: invoicing
     environments:
       prod:
         domain: invoicing.dimeconsultants.africa
@@ -39,8 +44,10 @@ apps:
         port: 6001
 
   - name: guardian
-    repo: dime-consultants/guardian
+    repo: dime-consultants/Guardian-Bank-UI
     aliases:
+      - guardian
+      - dime-consultants/guardian
       - guardian.dimeconsultants.africa
       - stage-guardian.dimeconsultants.africa
     port_env: API_PORT

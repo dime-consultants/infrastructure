@@ -1,0 +1,87 @@
+---
+- name: Ensure Docker config directory exists
+  file:
+    path: /etc/docker
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Configure Docker json-file log rotation
+  template:
+    src: ../templates/docker-daemon.json.j2
+    dest: /etc/docker/daemon.json
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Docker
+
+- name: Collect disk usage before Docker maintenance
+  command: df -h / /var/lib/docker
+  register: disk_usage_before_cleanup
+  changed_when: false
+  failed_when: false
+
+- name: Collect Docker disk usage before cleanup
+  command: docker system df
+  register: docker_disk_usage_before_cleanup
+  changed_when: false
+  failed_when: false
+
+- name: Print disk usage before cleanup
+  debug:
+    msg:
+      - "df -h / /var/lib/docker:"
+      - "{{ disk_usage_before_cleanup.stdout_lines | default([]) }}"
+      - "docker system df:"
+      - "{{ docker_disk_usage_before_cleanup.stdout_lines | default([]) }}"
+
+- name: Remove unused Docker images, stopped containers, and unused networks
+  command: docker system prune -af
+  register: docker_system_prune
+  changed_when: "'Total reclaimed space' in docker_system_prune.stdout"
+
+- name: Remove unused Docker build cache
+  command: docker builder prune -af
+  register: docker_builder_prune
+  changed_when: "'Total reclaimed space' in docker_builder_prune.stdout"
+
+- name: Vacuum old systemd journal logs
+  command: "journalctl --vacuum-time={{ docker_maintenance.journal_vacuum_time | default('14d') }}"
+  register: journal_vacuum
+  changed_when: "'Vacuuming done' in journal_vacuum.stdout or 'Deleted archived journal' in journal_vacuum.stdout"
+  failed_when: false
+
+- name: Autoremove unused apt packages
+  apt:
+    autoremove: yes
+    purge: yes
+
+- name: Autoclean apt package cache
+  apt:
+    autoclean: yes
+
+- name: Collect disk usage after Docker maintenance
+  command: df -P / /var/lib/docker
+  register: disk_usage_after_cleanup
+  changed_when: false
+
+- name: Print disk usage after cleanup
+  debug:
+    msg: "{{ disk_usage_after_cleanup.stdout_lines }}"
+
+- name: Validate disk space after cleanup
+  assert:
+    that:
+      - >-
+        {{
+          disk_usage_after_cleanup.stdout_lines[1:]
+          | map('regex_replace', '^.*\\s+(\\d+)%\\s+.*$', '\\1')
+          | map('int')
+          | max
+          < (docker_maintenance.max_disk_use_percent | default(90) | int)
+        }}
+    fail_msg: >-
+      Disk is still above {{ docker_maintenance.max_disk_use_percent | default(90) }}%
+      after cleanup. Free space or expand the server disk before deploying shared
+      services.

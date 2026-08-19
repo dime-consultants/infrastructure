@@ -1,0 +1,7 @@
+{
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "{{ docker_maintenance.log_max_size | default('20m') }}",
+    "max-file": "{{ docker_maintenance.log_max_file | default('5') }}"
+  }
+}
