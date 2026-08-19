@@ -12,16 +12,17 @@ shared_services:
       stage: {}
   - name: rabbitmq
     environments:
-      prod: {}
+      prod:
+        domain: rabbit.dimeconsultants.africa
       stage: {}
   - name: portainer
     environments:
       prod:
-        domain: portainer.dimeapp.co.ke
+        domain: portainer.dimeconsultants.africa
   - name: grafana
     environments:
       prod:
-        domain: grafana.dimeapp.co.ke
+        domain: grafana.dimeconsultants.africa
         published_port: 3300
 
 
@@ -59,7 +60,13 @@ apps:
         domain: stage-guardian.dimeconsultants.africa
         port: 3005
 
-extra_domains: []
+extra_domains:
+  - domain: promtail.dimeconsultants.africa
+    proxy_port: 9080
+    basic_auth: true
+  - domain: argocd.dimeconsultants.africa
+    proxy_port: 8080
+    preserve_authorization: true
 
 backups:
   enabled: false
