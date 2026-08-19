@@ -109,36 +109,46 @@ jobs:
           echo "${{ github.event.client_payload.docker_compose_b64 }}" | base64 -d > /tmp/docker-compose-raw.yml
 
       - name: Create .env file
+        env:
+          IMAGE_TAG: ${{ github.event.client_payload.image_tag }}
+          SHARED_ENV: ${{ github.event.client_payload.env }}
+          ENV_SECRETS_JSON: ${{ toJson(github.event.client_payload.env_secrets) }}
         run: |
-          # Start with deployment metadata (not secrets)
-          echo "IMAGE_TAG=${{ github.event.client_payload.image_tag }}" > /tmp/.env
-          echo "SHARED_ENV=${{ github.event.client_payload.env }}" >> /tmp/.env
+          python3 <<'PY'
+          import json
+          import os
 
-          # Append app secrets from payload. Infrastructure-owned values are
-          # derived from ansible/data/servers and ansible/data/shared-services.
-          echo '${{ toJson(github.event.client_payload.env_secrets) }}' | \
-            jq -r '
-              . as $secrets
-              | [
-                "IMAGE_TAG",
-                "SHARED_ENV",
-                "SHARED_NETWORK",
-                "DATABASE_DB",
-                "DATABASE_USER",
-                "DATABASE_PASSWORD",
-                "DATABASE_HOST",
-                "DATABASE_PORT",
-                "RABBITMQ_NAMESPACE",
-                "RABBITMQ_DEFAULT_USER",
-                "RABBITMQ_DEFAULT_PASS",
-                "CELERY_BROKER_URL"
-              ] | map({(.): true}) | add as $reserved
-              | $secrets
-              | to_entries[]
-              | . as $entry
-              | select(($reserved | has($entry.key)) | not)
-              | "\($entry.key)=\($entry.value)"
-            ' >> /tmp/.env
+          reserved = {
+              "IMAGE_TAG",
+              "SHARED_ENV",
+              "SHARED_NETWORK",
+              "DATABASE_DB",
+              "DATABASE_USER",
+              "DATABASE_PASSWORD",
+              "DATABASE_HOST",
+              "DATABASE_PORT",
+              "RABBITMQ_NAMESPACE",
+              "RABBITMQ_DEFAULT_USER",
+              "RABBITMQ_DEFAULT_PASS",
+              "CELERY_BROKER_URL",
+          }
+
+          def dotenv_line(key, value):
+              value = "" if value is None else str(value)
+              return f"{key}='{value.replace(chr(39), chr(92) + chr(39))}'\n"
+
+          env_secrets = json.loads(os.environ.get("ENV_SECRETS_JSON") or "{}")
+
+          with open("/tmp/.env", "w") as env_file:
+              env_file.write(dotenv_line("IMAGE_TAG", os.environ["IMAGE_TAG"]))
+              env_file.write(dotenv_line("SHARED_ENV", os.environ["SHARED_ENV"]))
+
+              # App payload secrets may contain '$'. Single quotes keep Docker
+              # Compose from treating secret fragments as variable references.
+              for key, value in env_secrets.items():
+                  if key not in reserved:
+                      env_file.write(dotenv_line(key, value))
+          PY
 
       - name: Append app environment metadata
         if: ${{ contains(needs.prepare.outputs.servers, matrix.server) }}
@@ -298,7 +308,9 @@ jobs:
 
                   with open("/tmp/.env", "a") as env_file:
                       for key, value in env_values.items():
-                          env_file.write(f"{key}={value}\n")
+                          value = "" if value is None else str(value)
+                          escaped_value = value.replace("'", "\\'")
+                          env_file.write(f"{key}='{escaped_value}'\n")
                   raise SystemExit(0)
 
           raise SystemExit(f"No app environment metadata found for {repo} {env_name} on {target_server}")
