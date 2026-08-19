@@ -24,6 +24,10 @@ shared_services:
 apps:
   - name: invoicing
     repo: dime-consultants/ai_invoicing
+    aliases:
+      - ai_invoicing
+      - invoicing.dimeconsultants.africa
+      - stage-invoicing.dimeconsultants.africa
     port_env: API_PORT
     postgres_database: invoicing
     environments:
@@ -36,6 +40,9 @@ apps:
 
   - name: guardian
     repo: dime-consultants/guardian
+    aliases:
+      - guardian.dimeconsultants.africa
+      - stage-guardian.dimeconsultants.africa
     port_env: API_PORT
     environments:
       prod:
@@ -46,3 +53,6 @@ apps:
         port: 3005
 
 extra_domains: []
+
+backups:
+  enabled: false

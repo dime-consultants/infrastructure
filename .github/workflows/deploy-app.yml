@@ -44,7 +44,8 @@ jobs:
                           })
 
           matrix_json = json.dumps({"include": matrix_entries})
-          print(f"::set-output name=matrix::{matrix_json}")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"matrix={matrix_json}\n")
           PY
 
   prepare:
@@ -52,34 +53,20 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       servers: ${{ steps.targets.outputs.servers }}
+      servers_json: ${{ steps.targets.outputs.servers_json }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
     
       - name: Find target servers for this app
         id: targets
+        env:
+          TARGET_SERVER: ${{ github.event.client_payload.target_server || github.event.client_payload.server }}
         run: |
-            python3 <<'PY'
-            import yaml, os
-            repo = "${{ github.event.client_payload.app_repo }}"
-            servers = []
-            servers_dir = "ansible/data/servers"
-
-            for f in os.listdir(servers_dir):
-                if f.endswith(".yml"):
-                    with open(os.path.join(servers_dir, f)) as file:
-                        data = yaml.safe_load(file) or {}
-                        if data.get("enabled") is False:
-                            continue
-                        # Case-insensitive repo match
-                        if any(app.get("repo", "").lower() == repo.lower() for app in data.get("apps", [])):
-                            server_name = data.get("server_name")
-                            if server_name:
-                                servers.append(server_name)
-            servers_str = ','.join(servers)
-            print("Target servers found:", servers_str)
-            print(f"::set-output name=servers::{servers_str}")
-            PY
+          python3 ansible/scripts/deployment_resolver.py targets \
+            --app "${{ github.event.client_payload.app_repo }}" \
+            --env "${{ github.event.client_payload.env }}" \
+            --server "$TARGET_SERVER"
             
   deploy:
     name: Deploy ${{ github.event.client_payload.app_repo }} ${{ github.event.client_payload.env }} to ${{ matrix.server }}
@@ -114,44 +101,14 @@ jobs:
           SHARED_ENV: ${{ github.event.client_payload.env }}
           ENV_SECRETS_JSON: ${{ toJson(github.event.client_payload.env_secrets) }}
         run: |
-          python3 <<'PY'
-          import json
-          import os
-
-          reserved = {
-              "IMAGE_TAG",
-              "SHARED_ENV",
-              "SHARED_NETWORK",
-              "DATABASE_DB",
-              "DATABASE_USER",
-              "DATABASE_PASSWORD",
-              "DATABASE_HOST",
-              "DATABASE_PORT",
-              "RABBITMQ_NAMESPACE",
-              "RABBITMQ_DEFAULT_USER",
-              "RABBITMQ_DEFAULT_PASS",
-              "CELERY_BROKER_URL",
-          }
-
-          def dotenv_line(key, value):
-              value = "" if value is None else str(value)
-              return f"{key}='{value.replace(chr(39), chr(92) + chr(39))}'\n"
-
-          env_secrets = json.loads(os.environ.get("ENV_SECRETS_JSON") or "{}")
-
-          with open("/tmp/.env", "w") as env_file:
-              env_file.write(dotenv_line("IMAGE_TAG", os.environ["IMAGE_TAG"]))
-              env_file.write(dotenv_line("SHARED_ENV", os.environ["SHARED_ENV"]))
-
-              # App payload secrets may contain '$'. Single quotes keep Docker
-              # Compose from treating secret fragments as variable references.
-              for key, value in env_secrets.items():
-                  if key not in reserved:
-                      env_file.write(dotenv_line(key, value))
-          PY
+          python3 ansible/scripts/deployment_resolver.py create-env \
+            --image-tag "$IMAGE_TAG" \
+            --env "$SHARED_ENV" \
+            --env-secrets-json "$ENV_SECRETS_JSON" \
+            --output /tmp/.env
 
       - name: Append app environment metadata
-        if: ${{ contains(needs.prepare.outputs.servers, matrix.server) }}
+        if: ${{ contains(fromJson(needs.prepare.outputs.servers_json), matrix.server) }}
         env:
           POSTGRES_PROD_USER: ${{ secrets.POSTGRES_PROD_USER }}
           POSTGRES_PROD_PASSWORD: ${{ secrets.POSTGRES_PROD_PASSWORD }}
@@ -162,167 +119,20 @@ jobs:
           RABBITMQ_STAGE_USER: ${{ secrets.RABBITMQ_STAGE_USER }}
           RABBITMQ_STAGE_PASSWORD: ${{ secrets.RABBITMQ_STAGE_PASSWORD }}
         run: |
-          python3 <<'PY'
-          import os
-          import yaml
-          from urllib.parse import quote
-
-          repo = "${{ github.event.client_payload.app_repo }}"
-          env_name = "${{ github.event.client_payload.env }}"
-          target_server = "${{ matrix.server }}"
-          servers_dir = "ansible/data/servers"
-          shared_services_path = "ansible/data/shared-services.yml"
-
-          with open(shared_services_path) as file:
-              shared_catalog = yaml.safe_load(file) or {}
-
-          shared_service_catalog = shared_catalog.get("shared_service_catalog", {})
-
-          def subscribed_environment(server, service_name, env_name):
-              for service in server.get("shared_services", []):
-                  if service.get("name") != service_name:
-                      continue
-                  environments = service.get("environments") or {}
-                  if isinstance(environments, dict) and env_name in environments:
-                      return environments[env_name] or {}
-                  if isinstance(environments, list) and env_name in environments:
-                      return {}
-              raise SystemExit(
-                  f"{target_server} must subscribe to shared service "
-                  f"{service_name}:{env_name} before deploying {repo} {env_name}"
-              )
-
-          def service_env_config(service_name, env_name):
-              service = shared_service_catalog.get(service_name, {})
-              environments = service.get("environments") or {}
-              if env_name not in environments:
-                  raise SystemExit(
-                      f"Shared service catalog has no {service_name}:{env_name} config"
-                  )
-              return environments[env_name] or {}
-
-          def secret_value(secret_names, key, label):
-              secret_name = secret_names.get(key)
-              if not secret_name:
-                  raise SystemExit(f"Missing secret_names.{key} for {label}")
-              value = os.environ.get(secret_name)
-              if not value:
-                  raise SystemExit(f"GitHub Secret {secret_name} is required for {label}")
-              return value
-
-          for filename in os.listdir(servers_dir):
-              if not filename.endswith(".yml"):
-                  continue
-              with open(os.path.join(servers_dir, filename)) as file:
-                  data = yaml.safe_load(file) or {}
-              if data.get("enabled") is False:
-                  continue
-              if data.get("server_name") != target_server:
-                  continue
-              for app in data.get("apps", []):
-                  if app.get("repo", "").lower() != repo.lower():
-                      continue
-                  app_env = {
-                      key: value
-                      for key, value in app.items()
-                      if key != "environments"
-                  }
-                  app_env.update((app.get("environments") or {}).get(env_name, {}))
-                  rabbitmq_namespace = app_env.get("rabbitmq_namespace")
-                  postgres_database = app_env.get("postgres_database")
-                  app_port = app_env.get("port")
-                  port_env = app_env.get("port_env")
-
-                  env_values = {}
-
-                  if isinstance(port_env, str):
-                      if not app_port:
-                          raise SystemExit(
-                              f"{target_server} {app.get('name')}:{env_name} "
-                              f"sets port_env={port_env} but has no port"
-                          )
-                      env_values[port_env] = str(app_port)
-                  elif isinstance(port_env, dict):
-                      for env_key, env_value in port_env.items():
-                          env_values[str(env_key)] = str(env_value)
-                  elif port_env is not None:
-                      raise SystemExit(
-                          f"{target_server} {app.get('name')}:{env_name} "
-                          "port_env must be a string or mapping"
-                      )
-                  elif app_port:
-                      env_values["API_PORT"] = str(app_port)
-
-                  if postgres_database:
-                      subscribed_environment(data, "postgres", env_name)
-                      postgres_config = service_env_config("postgres", env_name)
-                      postgres_secret_names = postgres_config.get("secret_names") or {}
-                      env_values.update({
-                          "DATABASE_DB": postgres_database,
-                          "DATABASE_USER": secret_value(
-                              postgres_secret_names,
-                              "username",
-                              f"postgres:{env_name}",
-                          ),
-                          "DATABASE_PASSWORD": secret_value(
-                              postgres_secret_names,
-                              "password",
-                              f"postgres:{env_name}",
-                          ),
-                          "DATABASE_HOST": postgres_config.get("service_host", "postgres"),
-                          "DATABASE_PORT": "5432",
-                          "SHARED_NETWORK": postgres_config.get("network", f"shared-{env_name}"),
-                      })
-
-                  if rabbitmq_namespace:
-                      subscribed_environment(data, "rabbitmq", env_name)
-                      rabbitmq_config = service_env_config("rabbitmq", env_name)
-                      rabbitmq_secret_names = rabbitmq_config.get("secret_names") or {}
-                      rabbitmq_user = secret_value(
-                          rabbitmq_secret_names,
-                          "username",
-                          f"rabbitmq:{env_name}",
-                      )
-                      rabbitmq_password = secret_value(
-                          rabbitmq_secret_names,
-                          "password",
-                          f"rabbitmq:{env_name}",
-                      )
-                      rabbitmq_host = rabbitmq_config.get("service_host", "rabbitmq")
-                      rabbitmq_user_url = quote(rabbitmq_user, safe="")
-                      rabbitmq_password_url = quote(rabbitmq_password, safe="")
-                      env_values.update({
-                          "RABBITMQ_NAMESPACE": rabbitmq_namespace,
-                          "RABBITMQ_DEFAULT_USER": rabbitmq_user,
-                          "RABBITMQ_DEFAULT_PASS": rabbitmq_password,
-                          "CELERY_BROKER_URL": (
-                              f"amqp://{rabbitmq_user_url}:{rabbitmq_password_url}"
-                              f"@{rabbitmq_host}:5672/"
-                              f"{quote(rabbitmq_namespace, safe='')}"
-                          ),
-                          "SHARED_NETWORK": rabbitmq_config.get(
-                              "network",
-                              env_values.get("SHARED_NETWORK", f"shared-{env_name}"),
-                          ),
-                      })
-
-                  with open("/tmp/.env", "a") as env_file:
-                      for key, value in env_values.items():
-                          value = "" if value is None else str(value)
-                          escaped_value = value.replace("'", "\\'")
-                          env_file.write(f"{key}='{escaped_value}'\n")
-                  raise SystemExit(0)
-
-          raise SystemExit(f"No app environment metadata found for {repo} {env_name} on {target_server}")
-          PY
+          python3 ansible/scripts/deployment_resolver.py env \
+            --app "${{ github.event.client_payload.app_repo }}" \
+            --env "${{ github.event.client_payload.env }}" \
+            --target-server "${{ matrix.server }}" \
+            --output /tmp/.env \
+            --append
 
       - name: Render final docker-compose
-        if: ${{ contains(needs.prepare.outputs.servers, matrix.server) }}
+        if: ${{ contains(fromJson(needs.prepare.outputs.servers_json), matrix.server) }}
         run: |
           docker compose -f /tmp/docker-compose-raw.yml --env-file /tmp/.env config > /tmp/docker-compose.yml
 
       - name: Deploy only if this matrix server is in the target list
-        if: ${{ contains(needs.prepare.outputs.servers, matrix.server) }}
+        if: ${{ contains(fromJson(needs.prepare.outputs.servers_json), matrix.server) }}
         env:
           ANSIBLE_HOST_KEY_CHECKING: False
           SSH_PRIVATE_KEY: ${{ secrets[format('{0}', matrix.secret_name)] }}

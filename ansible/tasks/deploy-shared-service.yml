@@ -54,6 +54,13 @@
   copy:
     src: ../shared-services/grafana/loki-config.yml
     dest: "{{ shared_service_project_dir }}/loki-config.yml"
+  mode: "0644"
+  when: shared_service_name == 'grafana'
+
+- name: Copy Grafana Prometheus config
+  copy:
+    src: ../shared-services/grafana/prometheus.yml
+    dest: "{{ shared_service_project_dir }}/prometheus.yml"
     mode: "0644"
   when: shared_service_name == 'grafana'
 

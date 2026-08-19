@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+source /etc/dime/restic-backup.env
+
+mkdir -p "$RESTIC_CACHE_DIR" "$BACKUP_STAGING_DIR"
+chmod 700 "$RESTIC_CACHE_DIR" "$BACKUP_STAGING_DIR"
+
+cleanup() {
+  rm -rf "${BACKUP_STAGING_DIR:?}/"*
+}
+trap cleanup EXIT
+
+if ! restic snapshots >/dev/null 2>&1; then
+  restic init
+fi
+
+if [ "$POSTGRES_BACKUP_ENABLED" = "true" ] && [ -d "{{ shared_service_base_dir }}/postgres" ]; then
+  find "{{ shared_service_base_dir }}/postgres" -mindepth 1 -maxdepth 1 -type d | while read -r env_dir; do
+    env_name="$(basename "$env_dir")"
+    project_name="shared_postgres_${env_name}"
+    compose_file="$env_dir/docker-compose.yml"
+
+    if [ ! -f "$compose_file" ]; then
+      continue
+    fi
+
+    container="$(
+      docker compose \
+        --project-directory "$env_dir" \
+        -p "$project_name" \
+        -f "$compose_file" \
+        ps -q postgres
+    )"
+
+    if [ -z "$container" ]; then
+      echo "Skipping postgres:$env_name because no container is running" >&2
+      continue
+    fi
+
+    docker exec "$container" sh -ec 'pg_dumpall -U "$POSTGRES_USER"' \
+      > "$BACKUP_STAGING_DIR/postgres-${env_name}.sql"
+  done
+fi
+
+IFS=":" read -r -a configured_paths <<< "$BACKUP_PATHS"
+backup_paths=()
+for path in "${configured_paths[@]}"; do
+  if [ -e "$path" ]; then
+    backup_paths+=("$path")
+  fi
+done
+
+if compgen -G "$BACKUP_STAGING_DIR/*" >/dev/null; then
+  backup_paths+=("$BACKUP_STAGING_DIR")
+fi
+
+if [ "${#backup_paths[@]}" -eq 0 ]; then
+  echo "No backup paths exist on this host" >&2
+  exit 1
+fi
+
+restic backup "${backup_paths[@]}" --tag "$BACKUP_TAGS"
+restic forget \
+  --tag "$BACKUP_TAGS" \
+  --keep-daily "$RESTIC_KEEP_DAILY" \
+  --keep-weekly "$RESTIC_KEEP_WEEKLY" \
+  --keep-monthly "$RESTIC_KEEP_MONTHLY" \
+  --prune
+restic check

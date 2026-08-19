@@ -51,6 +51,8 @@ Shared service secrets:
 | `GRAFANA_PROD_PASSWORD` | Shared production Grafana password |
 | `GRAFANA_STAGE_USER` | Shared stage Grafana user |
 | `GRAFANA_STAGE_PASSWORD` | Shared stage Grafana password |
+| `RESTIC_REPOSITORY` | Restic backup repository URL/path for servers with backups enabled |
+| `RESTIC_PASSWORD` | Restic repository encryption password |
 
 Postgres database names are declared inside each app environment as
 `postgres_database`. They are not GitHub Secrets. Apps should use that DB name
@@ -70,4 +72,6 @@ Portainer does not currently require a GitHub secret. The initial admin account
 is configured through the Portainer UI on first login.
 
 Application runtime secrets are still supplied by each app deployment payload
-and are written to that app's `.env` during `Deploy App`.
+and are written to that app's `.env` during `Deploy App`. Generated dotenv
+values are single-quoted so secrets containing `$` are passed to Docker Compose
+literally instead of being interpreted as Compose variable references.

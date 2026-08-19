@@ -82,6 +82,9 @@ shared_service_catalog:
         volume: shared_grafana_prod_data
         loki_volume: shared_loki_prod_data
         promtail_volume: shared_promtail_prod_data
+        prometheus_port: 9090
+        prometheus_volume: shared_prometheus_prod_data
+        prometheus_retention: 15d
         service_host: grafana
         secret_names:
           username: GRAFANA_PROD_USER
@@ -92,6 +95,9 @@ shared_service_catalog:
         volume: shared_grafana_stage_data
         loki_volume: shared_loki_stage_data
         promtail_volume: shared_promtail_stage_data
+        prometheus_port: 9091
+        prometheus_volume: shared_prometheus_stage_data
+        prometheus_retention: 7d
         service_host: grafana
         secret_names:
           username: GRAFANA_STAGE_USER

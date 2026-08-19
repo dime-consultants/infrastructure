@@ -94,6 +94,9 @@
         name: "{{ common_packages }}"
         state: present
 
+    - name: Configure security baseline
+      include_tasks: ../tasks/configure-security.yml
+
     - name: Deploy subscribed shared services
       include_tasks: ../tasks/deploy-shared-service-subscription.yml
       loop: "{{ shared_services | default([]) }}"
@@ -108,6 +111,9 @@
 
     - name: Provision app databases and broker namespaces
       include_tasks: ../tasks/provision-app-shared-dependencies.yml
+
+    - name: Configure backups
+      include_tasks: ../tasks/configure-backups.yml
 
     - name: Enable and configure UFW
       ufw:
@@ -202,3 +208,8 @@
       service:
         name: nginx
         state: reloaded
+
+    - name: Restart Fail2Ban
+      service:
+        name: fail2ban
+        state: restarted

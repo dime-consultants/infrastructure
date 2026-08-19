@@ -1,0 +1,95 @@
+---
+- name: Resolve backup configuration
+  set_fact:
+    backup_config: "{{ backup_defaults | combine(backups | default({}), recursive=True) }}"
+    backup_staging_dir: "/var/backups/dime/staging"
+
+- name: Skip backups when disabled
+  debug:
+    msg: "Backups are disabled for {{ inventory_hostname }}."
+  when: not backup_config.enabled | bool
+
+- name: Configure backups
+  when: backup_config.enabled | bool
+  block:
+    - name: Resolve Restic backup secrets
+      set_fact:
+        backup_config: >-
+          {{
+            backup_config
+            | combine(
+                {
+                  'repository': lookup('env', backup_config.repository_secret_name),
+                  'password': lookup('env', backup_config.password_secret_name)
+                },
+                recursive=True
+              )
+          }}
+
+    - name: Validate Restic backup secrets
+      assert:
+        that:
+          - backup_config.repository | length > 0
+          - backup_config.password | length > 0
+        fail_msg: >-
+          {{ backup_config.repository_secret_name }} and
+          {{ backup_config.password_secret_name }} are required when backups are
+          enabled for {{ inventory_hostname }}.
+
+    - name: Install Restic
+      apt:
+        name: restic
+        state: present
+        update_cache: yes
+
+    - name: Create backup directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+      loop:
+        - /etc/dime
+        - /var/cache/restic
+        - /var/backups/dime
+        - "{{ backup_staging_dir }}"
+
+    - name: Render Restic environment
+      template:
+        src: ../templates/restic-backup.env.j2
+        dest: /etc/dime/restic-backup.env
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: Render Restic backup script
+      template:
+        src: ../templates/restic-backup.sh.j2
+        dest: /usr/local/sbin/dime-restic-backup
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Render Restic systemd service
+      template:
+        src: ../templates/restic-backup.service.j2
+        dest: /etc/systemd/system/dime-restic-backup.service
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Render Restic systemd timer
+      template:
+        src: ../templates/restic-backup.timer.j2
+        dest: /etc/systemd/system/dime-restic-backup.timer
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Enable Restic backup timer
+      systemd:
+        name: dime-restic-backup.timer
+        enabled: yes
+        state: started
+        daemon_reload: yes

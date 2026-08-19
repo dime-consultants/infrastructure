@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Dime infrastructure Restic backup
+
+[Timer]
+OnCalendar={{ backup_config.schedule }}
+RandomizedDelaySec={{ backup_config.randomized_delay_sec | default('30m') }}
+Persistent=true
+
+[Install]
+WantedBy=timers.target

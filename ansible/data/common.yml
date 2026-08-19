@@ -4,3 +4,27 @@ common_packages:
   - certbot
   - python3-certbot-nginx
   - python3-docker
+  - fail2ban
+  - unattended-upgrades
+
+security_baseline:
+  unattended_upgrades: true
+  fail2ban: true
+
+backup_defaults:
+  enabled: false
+  repository_secret_name: RESTIC_REPOSITORY
+  password_secret_name: RESTIC_PASSWORD
+  schedule: "*-*-* 02:30:00"
+  randomized_delay_sec: "30m"
+  retention:
+    keep_daily: 7
+    keep_weekly: 4
+    keep_monthly: 6
+  paths:
+    - /opt
+    - /etc/nginx/sites-available
+    - /etc/nginx/sites-enabled
+    - /etc/letsencrypt
+  postgres:
+    enabled: true

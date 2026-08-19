@@ -16,6 +16,53 @@ services:
         aliases:
           - ${SERVICE_HOST}
 
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION}
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT}:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      default:
+        aliases:
+          - prometheus
+
+  node-exporter:
+    image: quay.io/prometheus/node-exporter:v1.8.2
+    restart: unless-stopped
+    command:
+      - --path.rootfs=/host
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+    networks:
+      default:
+        aliases:
+          - node-exporter
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    restart: unless-stopped
+    privileged: true
+    devices:
+      - /dev/kmsg:/dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk:/dev/disk:ro
+    networks:
+      default:
+        aliases:
+          - cadvisor
+
   loki:
     image: grafana/loki:3.1.1
     restart: unless-stopped
@@ -54,3 +101,5 @@ volumes:
     name: ${LOKI_VOLUME}
   promtail_data:
     name: ${PROMTAIL_VOLUME}
+  prometheus_data:
+    name: ${PROMETHEUS_VOLUME}

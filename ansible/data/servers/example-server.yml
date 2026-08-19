@@ -57,6 +57,9 @@ shared_services:
 apps:
   - name: example-api
     repo: example-org/example-api
+    aliases:
+      - api
+      - api.example.com
     port_env: API_PORT
     postgres_database: example_api
     rabbitmq_namespace: example-api
@@ -85,3 +88,19 @@ extra_domains:
   - domain: custom-tool.example.com
     proxy_port: 9090
     basic_auth: true
+
+# Backups are opt-in per server. RESTIC_REPOSITORY and RESTIC_PASSWORD are read
+# from GitHub Secrets by default. The timer dumps shared Postgres databases,
+# backs up the listed paths, applies retention, and runs restic check.
+backups:
+  enabled: true
+  schedule: "*-*-* 02:30:00"
+  retention:
+    keep_daily: 7
+    keep_weekly: 4
+    keep_monthly: 6
+  paths:
+    - /opt
+    - /etc/nginx/sites-available
+    - /etc/nginx/sites-enabled
+    - /etc/letsencrypt

@@ -1,0 +1,12 @@
+[Unit]
+Description=Dime infrastructure Restic backup
+Wants=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/dime/restic-backup.env
+ExecStart=/usr/local/sbin/dime-restic-backup
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

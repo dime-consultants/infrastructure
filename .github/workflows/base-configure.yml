@@ -105,6 +105,22 @@ jobs:
           POSTGRES_STAGE_USER: ${{ secrets.POSTGRES_STAGE_USER }}
           POSTGRES_STAGE_PASSWORD: ${{ secrets.POSTGRES_STAGE_PASSWORD }}
 
+          RABBITMQ_PROD_USER: ${{ secrets.RABBITMQ_PROD_USER }}
+          RABBITMQ_PROD_PASSWORD: ${{ secrets.RABBITMQ_PROD_PASSWORD }}
+          RABBITMQ_STAGE_USER: ${{ secrets.RABBITMQ_STAGE_USER }}
+          RABBITMQ_STAGE_PASSWORD: ${{ secrets.RABBITMQ_STAGE_PASSWORD }}
+
+          GRAFANA_PROD_USER: ${{ secrets.GRAFANA_PROD_USER }}
+          GRAFANA_PROD_PASSWORD: ${{ secrets.GRAFANA_PROD_PASSWORD }}
+          GRAFANA_STAGE_USER: ${{ secrets.GRAFANA_STAGE_USER }}
+          GRAFANA_STAGE_PASSWORD: ${{ secrets.GRAFANA_STAGE_PASSWORD }}
+
+          RESTIC_REPOSITORY: ${{ secrets.RESTIC_REPOSITORY }}
+          RESTIC_PASSWORD: ${{ secrets.RESTIC_PASSWORD }}
+
+          BASIC_AUTH_USERNAME: ${{ secrets.BASIC_AUTH_USERNAME }}
+          BASIC_AUTH_PASSWORD: ${{ secrets.BASIC_AUTH_PASSWORD }}
+
         run: |
           echo "Configuring $TARGET_SERVER"
 

@@ -1,0 +1,20 @@
+[DEFAULT]
+bantime = {{ security_baseline.fail2ban_bantime | default('1h') }}
+findtime = {{ security_baseline.fail2ban_findtime | default('10m') }}
+maxretry = {{ security_baseline.fail2ban_maxretry | default(5) }}
+backend = systemd
+
+[sshd]
+enabled = true
+port = ssh
+logpath = %(sshd_log)s
+
+[nginx-http-auth]
+enabled = true
+port = http,https
+logpath = /var/log/nginx/error.log
+
+[nginx-botsearch]
+enabled = true
+port = http,https
+logpath = /var/log/nginx/access.log
