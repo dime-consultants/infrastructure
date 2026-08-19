@@ -87,6 +87,7 @@
         src: "{{ compose_file }}"
         dest: "{{ app_dir }}/docker-compose.yml"
         mode: '0644'
+      when: compose_file is defined
 
     - name: Copy .env file
       copy:
@@ -95,6 +96,7 @@
         mode: '0644'
         owner: "{{ ansible_user }}"
         group: "{{ ansible_user }}"
+      when: env_file is defined
 
     - name: Force image tag override (for rollback)
       lineinfile:

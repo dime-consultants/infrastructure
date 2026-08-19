@@ -91,15 +91,6 @@ jobs:
         run: |
           echo "Rollback targeting ${{ matrix.server }} — proceeding"
 
-      - name: Create rollback .env file
-        if: ${{ github.event.inputs.server == matrix.server }}
-        run: |
-          cat << EOF > /tmp/.env
-          IMAGE_TAG=${{ inputs.previous_tag }}
-          SHARED_ENV=${{ inputs.env }}
-          NODE_ENV=${{ inputs.env == 'prod' && 'production' || 'staging' }}
-          EOF
-
       - name: Perform rollback on ${{ matrix.server }}
         if: ${{ github.event.inputs.server == matrix.server }}
         env:
@@ -108,6 +99,14 @@ jobs:
           TARGET_SERVER: ${{ matrix.server }}
           TARGET_PUBLIC_IP: ${{ secrets[format('{0}', matrix.public_ip_secret_name)] }}
           TARGET_SSH_USER: ${{ secrets[format('{0}', matrix.ssh_user_secret_name)] }}
+          POSTGRES_PROD_USER: ${{ secrets.POSTGRES_PROD_USER }}
+          POSTGRES_PROD_PASSWORD: ${{ secrets.POSTGRES_PROD_PASSWORD }}
+          POSTGRES_STAGE_USER: ${{ secrets.POSTGRES_STAGE_USER }}
+          POSTGRES_STAGE_PASSWORD: ${{ secrets.POSTGRES_STAGE_PASSWORD }}
+          RABBITMQ_PROD_USER: ${{ secrets.RABBITMQ_PROD_USER }}
+          RABBITMQ_PROD_PASSWORD: ${{ secrets.RABBITMQ_PROD_PASSWORD }}
+          RABBITMQ_STAGE_USER: ${{ secrets.RABBITMQ_STAGE_USER }}
+          RABBITMQ_STAGE_PASSWORD: ${{ secrets.RABBITMQ_STAGE_PASSWORD }}
         run: |
           app_name=$(basename "${{ inputs.app_repo }}")
 
@@ -121,8 +120,9 @@ jobs:
           ansible-playbook ansible/playbooks/deploy-app.yml \
             --inventory ansible/inventory/dynamic_inventory.py \
             --limit "${{ matrix.server }}" \
+            --extra-vars "target_server=${{ matrix.server }}" \
             --extra-vars "app_name=$app_name" \
+            --extra-vars "app_repo=${{ inputs.app_repo }}" \
             --extra-vars "env=${{ inputs.env }}" \
-            --extra-vars "env_file=/tmp/.env" \
             --extra-vars "force_image_tag=${{ inputs.previous_tag }}" \
             --private-key <(echo "$SSH_PRIVATE_KEY")
