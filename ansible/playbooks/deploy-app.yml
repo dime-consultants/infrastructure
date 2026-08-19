@@ -5,18 +5,30 @@
   vars_files:
     - ../data/shared-services.yml
   vars:
-    app_dir: "/opt/{{ app_name }}/{{ env }}"
+    requested_app_identifiers:
+      - "{{ app_repo | default('') | lower }}"
+      - "{{ app_name | default('') | lower }}"
+      - "{{ (app_repo | default('') | basename | regex_replace('\\.git$', '')) | lower }}"
   tasks:
     - name: Resolve app deployment config
       set_fact:
         deployment_app: "{{ item }}"
         deployment_app_env: "{{ item | combine(item.environments[env], recursive=True) }}"
       loop: "{{ apps | default([]) }}"
+      vars:
+        deployment_app_identifiers: >-
+          {{
+            (
+              [item.name | default(''), item.repo | default(''), (item.repo | default('') | basename | regex_replace('\.git$', ''))]
+              + (item.aliases | default([]))
+            )
+            | map('lower')
+            | list
+          }}
       when:
-        - app_repo is defined
-        - item.repo | lower == app_repo | lower
         - item.environments is defined
         - env in item.environments
+        - (requested_app_identifiers | intersect(deployment_app_identifiers) | length) > 0
 
     - name: Validate app deployment config
       assert:
@@ -24,6 +36,10 @@
           - deployment_app is defined
           - deployment_app_env is defined
         fail_msg: "No app config found for {{ app_repo | default(app_name) }}:{{ env }} on {{ target_server }}."
+
+    - name: Resolve application directory
+      set_fact:
+        app_dir: "/opt/{{ deployment_app.name }}/{{ env }}"
 
     - name: Resolve Postgres subscription
       set_fact:
