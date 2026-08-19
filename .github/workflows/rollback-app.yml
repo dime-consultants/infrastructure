@@ -95,6 +95,13 @@ jobs:
         if: ${{ github.event.inputs.server == matrix.server }}
         env:
           ANSIBLE_HOST_KEY_CHECKING: False
+          ANSIBLE_TIMEOUT: "15"
+          ANSIBLE_SSH_ARGS: >-
+            -o ConnectTimeout=10
+            -o ConnectionAttempts=1
+            -o BatchMode=yes
+            -o ServerAliveInterval=30
+            -o ServerAliveCountMax=2
           SSH_PRIVATE_KEY: ${{ secrets[format('{0}', matrix.secret_name)] }}
           TARGET_SERVER: ${{ matrix.server }}
           TARGET_PUBLIC_IP: ${{ secrets[format('{0}', matrix.public_ip_secret_name)] }}
@@ -109,6 +116,34 @@ jobs:
           RABBITMQ_STAGE_PASSWORD: ${{ secrets.RABBITMQ_STAGE_PASSWORD }}
         run: |
           app_name=$(basename "${{ inputs.app_repo }}")
+          KEY_FILE=$(mktemp)
+          trap 'rm -f "$KEY_FILE"' EXIT
+          chmod 600 "$KEY_FILE"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$KEY_FILE"
+
+          echo "Checking SSH reachability for ${{ matrix.server }}"
+          ssh_ok=false
+          for attempt in 1 2 3; do
+            if ssh \
+              -i "$KEY_FILE" \
+              -o StrictHostKeyChecking=no \
+              -o UserKnownHostsFile=/dev/null \
+              -o LogLevel=ERROR \
+              -o ConnectTimeout=10 \
+              -o ConnectionAttempts=1 \
+              -o BatchMode=yes \
+              "$TARGET_SSH_USER@$TARGET_PUBLIC_IP" true; then
+              ssh_ok=true
+              break
+            fi
+            echo "SSH check failed for ${{ matrix.server }} on attempt $attempt/3"
+            sleep 5
+          done
+
+          if [ "$ssh_ok" != "true" ]; then
+            echo "SSH is not reachable for ${{ matrix.server }} after 3 short attempts; aborting before Ansible."
+            exit 1
+          fi
 
           echo "=== ROLLING BACK ==="
           echo "App: $app_name"
@@ -126,4 +161,4 @@ jobs:
             --extra-vars "env=${{ inputs.env }}" \
             --extra-vars "force_image_tag=${{ inputs.previous_tag }}" \
             --timeout 15 \
-            --private-key <(echo "$SSH_PRIVATE_KEY")
+            --private-key "$KEY_FILE"
