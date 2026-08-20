@@ -1,16 +1,20 @@
 server_name: invoicing
+
 ssh_secret_name: INVOICING_SSH_KEY
 ssh_user_secret_name: INVOICING_SSH_USER
 public_ip_secret_name: INVOICING_PUBLIC_IP
+
 ansible_timeout: 15
 ssh_wait_delay: 0
 ssh_wait_timeout: 45
+
 ansible_ssh_common_args: >-
   -o ConnectTimeout=10
   -o ConnectionAttempts=1
   -o BatchMode=yes
   -o ServerAliveInterval=30
   -o ServerAliveCountMax=2
+
 docker_setup_enabled: false
 shared_services_deploy_enabled: false
 
@@ -25,16 +29,23 @@ shared_services:
     environments:
       prod: {}
       stage: {}
+
   - name: portainer
     environments:
       prod:
         domain: portainer.dimeconsultants.africa
+
   - name: grafana
     environments:
       prod:
         domain: grafana.dimeconsultants.africa
         published_port: 3300
 
+  - name: rabbitmq
+    environments:
+      prod:
+        domain: rabbitmq.dimeconsultants.africa
+      stage: {}
 
 apps:
   - name: invoicing
@@ -59,6 +70,28 @@ apps:
         domain: stage-invoicing.dimeconsultants.africa
         port: 6001
 
+  - name: hr
+    repo: dime-consultants/hrpayroll
+    aliases:
+      - hr
+      - hr.dimeconsultants.africa
+      - stage-hr.dimeconsultants.africa
+    port_env: API_PORT
+    postgres_database: hr
+    rabbitmq_namespace: hr
+    remove_deploy_artifacts:
+      - /root/tools/hrpayroll/image.tar
+    compose_pull: missing
+    compose_recreate: auto
+    compose_wait_timeout: 120
+    environments:
+      prod:
+        domain: hr.dimeconsultants.africa
+        port: 8023
+      stage:
+        domain: stage-hr.dimeconsultants.africa
+        port: 7734
+
   - name: guardian
     repo: dime-consultants/Guardian-Bank-UI
     aliases:
@@ -79,6 +112,7 @@ extra_domains:
   - domain: promtail.dimeconsultants.africa
     proxy_port: 9080
     basic_auth: true
+
   - domain: argocd.dimeconsultants.africa
     proxy_port: 8080
     preserve_authorization: true
