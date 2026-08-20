@@ -69,10 +69,10 @@ apps:
         domain: stage-invoicing.dimeconsultants.africa
         port: 6001
 
-  - name: hr
+  - name: hrpayroll
     repo: dime-consultants/hrpayroll
     aliases:
-      - hr
+      - hrpayroll
       - hr.dimeconsultants.africa
       - stage-hr.dimeconsultants.africa
     port_env: API_PORT
