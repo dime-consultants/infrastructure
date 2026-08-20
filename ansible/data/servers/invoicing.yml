@@ -39,7 +39,6 @@ shared_services:
     environments:
       prod:
         domain: grafana.dimeconsultants.africa
-        published_port: 3300
 
   - name: rabbitmq
     environments:
