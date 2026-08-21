@@ -1,0 +1,59 @@
+---
+- name: Validate Helm deployment settings
+  assert:
+    that:
+      - (deployment_app_env.image is defined and deployment_app_env.image.repository is defined) or image_tag is defined or force_image_tag is defined
+    fail_msg: "Helm deployments require deployment_app_env.image.repository or an image_tag/force_image_tag."
+
+- name: Resolve Helm option maps
+  set_fact:
+    helm_options: "{{ deployment_app_env.helm | default({}) }}"
+    image_options: "{{ deployment_app_env.image | default({}) }}"
+    helm_dynamic_secret_env: {}
+
+- name: Load generated environment file for Helm
+  set_fact:
+    helm_dynamic_secret_env: >-
+      {{
+        lookup(
+          'pipe',
+          'python3 ' ~ ((playbook_dir ~ '/../scripts/deployment_resolver.py') | quote) ~
+          ' dotenv-json --input ' ~ (env_file | quote)
+        ) | from_json
+      }}
+  when: env_file is defined
+
+- name: Resolve Helm deployment facts
+  set_fact:
+    helm_release_name: "{{ helm_options.release_name | default((deployment_app.name ~ '-' ~ env) | regex_replace('[^A-Za-z0-9-]', '-')) }}"
+    helm_namespace: "{{ helm_options.namespace | default(env) }}"
+    helm_chart_path: "{{ helm_options.chart | default(playbook_dir ~ '/../helm/dime-app') }}"
+    helm_values_file: "{{ app_dir }}/helm-values.yml"
+    helm_image_tag: "{{ force_image_tag | default(image_tag | default(image_options.tag | default('latest'))) }}"
+
+- name: Create Kubernetes namespace
+  command: >
+    kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    create namespace {{ helm_namespace }}
+  register: namespace_create
+  failed_when: namespace_create.rc != 0 and 'AlreadyExists' not in namespace_create.stderr
+  changed_when: namespace_create.rc == 0
+
+- name: Render Helm values
+  template:
+    src: ../templates/helm-values.yml.j2
+    dest: "{{ helm_values_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Deploy Helm release
+  command: >
+    helm upgrade --install {{ helm_release_name }} {{ helm_chart_path }}
+    --namespace {{ helm_namespace }}
+    --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    --values {{ helm_values_file }}
+    --wait
+    --timeout {{ helm_options.timeout | default('5m') }}
+  register: helm_deploy
+  changed_when: "'Release' in helm_deploy.stdout or 'deployed' in helm_deploy.stdout or 'upgraded' in helm_deploy.stdout"

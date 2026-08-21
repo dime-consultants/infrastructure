@@ -108,6 +108,82 @@ catalog, and shared service containers are managed by base/shared-service
 playbooks. Create application databases and RabbitMQ vhosts explicitly when
 introducing a new app or changing credentials.
 
+## Load Balancing
+
+Host-level Nginx can load balance a domain across multiple backends. If no
+backends are configured, the existing single `127.0.0.1:<port>` proxy is used.
+
+```yaml
+apps:
+  - name: billing-api
+    repo: dime-consultants/billing-api
+    load_balancing:
+      method: least_conn
+    environments:
+      prod:
+        domain: billing-api.dimeconsultants.africa
+        port: 6100
+        backends:
+          - host: 127.0.0.1
+            port: 6100
+            weight: 2
+          - host: 10.0.0.12
+            port: 6100
+```
+
+Supported methods are `round_robin`, `least_conn`, and `ip_hash`.
+
+## K3s And Helm
+
+K3s installation is opt-in per server:
+
+```yaml
+k3s:
+  enabled: true
+  channel: stable
+  disable:
+    - traefik
+```
+
+The default disables Traefik so it does not fight host Nginx for ports 80/443.
+Use `disable: []` only if Kubernetes ingress should own those ports.
+
+Apps can deploy through the reusable Helm chart at
+`ansible/helm/dime-app`:
+
+```yaml
+apps:
+  - name: billing-api
+    repo: dime-consultants/billing-api
+    deployment_type: helm
+    image:
+      repository: ghcr.io/dime-consultants/billing-api
+    environments:
+      prod:
+        namespace: prod
+        domain: billing-api.dimeconsultants.africa
+        replicas: 3
+        container_port: 8000
+        service:
+          type: NodePort
+          port: 80
+          targetPort: 8000
+          nodePort: 31080
+        nginx_managed: true
+        port: 31080
+        backends:
+          - host: 127.0.0.1
+            port: 31080
+        helm:
+          namespace: prod
+```
+
+For Kubernetes ingress instead of host Nginx, set `nginx_managed: false`,
+enable `ingress.enabled`, and make sure an ingress controller is installed.
+Application secrets should be provided through GitHub Secrets or inventory
+secret references and rendered into Kubernetes Secrets by Helm; do not commit
+secret values.
+
 ## Backups
 
 Backups are opt-in per server:

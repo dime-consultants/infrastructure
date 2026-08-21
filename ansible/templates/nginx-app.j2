@@ -1,3 +1,14 @@
+upstream {{ app.name | regex_replace('[^A-Za-z0-9_]', '_') }}_{{ env.key | regex_replace('[^A-Za-z0-9_]', '_') }} {
+    {% if load_balancing.method | default('round_robin') == 'least_conn' %}
+    least_conn;
+    {% elif load_balancing.method | default('round_robin') == 'ip_hash' %}
+    ip_hash;
+    {% endif %}
+    {% for backend in backend_servers %}
+    server {{ backend.host | default('127.0.0.1') }}:{{ backend.port | default(backend_port) }}{% if backend.weight is defined %} weight={{ backend.weight }}{% endif %} max_fails={{ backend.max_fails | default(load_balancing.max_fails | default(3)) }} fail_timeout={{ backend.fail_timeout | default(load_balancing.fail_timeout | default('30s')) }};
+    {% endfor %}
+}
+
 server {
     listen 80;
     listen [::]:80;
@@ -13,7 +24,7 @@ server {
     }
     {% else %}
     location / {
-        proxy_pass http://127.0.0.1:{{ backend_port }};
+        proxy_pass http://{{ app.name | regex_replace('[^A-Za-z0-9_]', '_') }}_{{ env.key | regex_replace('[^A-Za-z0-9_]', '_') }};
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -32,7 +43,7 @@ server {
     client_max_body_size 50M;
 
     location / {
-        proxy_pass http://127.0.0.1:{{ backend_port }};
+        proxy_pass http://{{ app.name | regex_replace('[^A-Za-z0-9_]', '_') }}_{{ env.key | regex_replace('[^A-Za-z0-9_]', '_') }};
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;

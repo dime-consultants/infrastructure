@@ -236,6 +236,30 @@ def dotenv_line(key, value):
     return f"{key}='{value.replace(chr(39), chr(92) + chr(39))}'\n"
 
 
+def parse_dotenv_value(value):
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] == "'":
+        return value[1:-1].replace("\\'", "'")
+    if len(value) >= 2 and value[0] == value[-1] == '"':
+        return bytes(value[1:-1], "utf-8").decode("unicode_escape")
+    return value
+
+
+def parse_dotenv(path):
+    values = {}
+    with open(path, encoding="utf-8") as env_file:
+        for raw_line in env_file:
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key):
+                fail(f"Invalid dotenv key: {key}")
+            values[key] = parse_dotenv_value(value)
+    return values
+
+
 def write_github_output(path, values):
     if not path:
         return
@@ -290,13 +314,21 @@ def cmd_env(args):
 
 
 def cmd_create_env(args):
-    env_secrets = json.loads(args.env_secrets_json or "{}")
+    env_vars = json.loads(args.env_vars_json or "{}") or {}
+    env_secrets = json.loads(args.env_secrets_json or "{}") or {}
     with open(args.output, "w", encoding="utf-8") as env_file:
         env_file.write(dotenv_line("IMAGE_TAG", args.image_tag))
         env_file.write(dotenv_line("SHARED_ENV", args.env))
+        for key, value in env_vars.items():
+            if key not in RESERVED_APP_ENV_KEYS:
+                env_file.write(dotenv_line(key, value))
         for key, value in env_secrets.items():
             if key not in RESERVED_APP_ENV_KEYS:
                 env_file.write(dotenv_line(key, value))
+
+
+def cmd_dotenv_json(args):
+    print(json.dumps(parse_dotenv(args.input)))
 
 
 def build_parser():
@@ -314,9 +346,14 @@ def build_parser():
     create_env = subparsers.add_parser("create-env")
     create_env.add_argument("--image-tag", required=True)
     create_env.add_argument("--env", required=True)
+    create_env.add_argument("--env-vars-json", default="{}")
     create_env.add_argument("--env-secrets-json", default="{}")
     create_env.add_argument("--output", required=True)
     create_env.set_defaults(func=cmd_create_env)
+
+    dotenv_json = subparsers.add_parser("dotenv-json")
+    dotenv_json.add_argument("--input", required=True)
+    dotenv_json.set_defaults(func=cmd_dotenv_json)
 
     env = subparsers.add_parser("env")
     env.add_argument("--app", required=True)

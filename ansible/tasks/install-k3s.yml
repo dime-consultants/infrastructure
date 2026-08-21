@@ -1,0 +1,62 @@
+---
+- name: Check whether K3s is installed
+  stat:
+    path: /usr/local/bin/k3s
+  register: k3s_binary
+
+- name: Install K3s installer dependencies
+  apt:
+    name:
+      - ca-certificates
+      - curl
+    state: present
+
+- name: Build K3s install arguments
+  set_fact:
+    k3s_install_exec: >-
+      server
+      --write-kubeconfig-mode {{ k3s.write_kubeconfig_mode | default('0644') }}
+      {%- for component in k3s.disable | default([]) %}
+      --disable {{ component }}
+      {%- endfor %}
+
+- name: Install K3s
+  shell: "curl -sfL {{ k3s.install_script_url | default('https://get.k3s.io') }} | INSTALL_K3S_CHANNEL={{ k3s.channel | default('stable') }} INSTALL_K3S_EXEC='{{ k3s_install_exec }}' sh -"
+  args:
+    creates: /usr/local/bin/k3s
+  when: not k3s_binary.stat.exists
+
+- name: Ensure K3s service is started and enabled
+  service:
+    name: k3s
+    state: started
+    enabled: yes
+
+- name: Wait for K3s API
+  command: kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }} get nodes
+  register: k3s_nodes
+  changed_when: false
+  retries: 20
+  delay: 6
+  until: k3s_nodes.rc == 0
+
+- name: Check whether Helm is installed
+  stat:
+    path: /usr/local/bin/helm
+  register: helm_binary
+  when: k3s.install_helm | default(true) | bool
+
+- name: Install Helm
+  shell: "curl -fsSL {{ k3s.helm_install_script_url | default('https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3') }} | bash"
+  args:
+    creates: /usr/local/bin/helm
+  when:
+    - k3s.install_helm | default(true) | bool
+    - not helm_binary.stat.exists
+
+- name: Allow Kubernetes API through UFW
+  ufw:
+    rule: allow
+    port: "{{ item }}"
+  loop: "{{ k3s.firewall_ports | default([]) }}"
+  when: k3s.firewall_ports | default([]) | length > 0

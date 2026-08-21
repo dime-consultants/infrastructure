@@ -98,7 +98,7 @@ jobs:
           ansible-galaxy collection install 'community.docker:>3.0.0'
 
       - name: Decode docker-compose.yml
-        if: ${{ contains(fromJson(needs.prepare.outputs.servers_json), matrix.server) }}
+        if: ${{ contains(fromJson(needs.prepare.outputs.servers_json), matrix.server) && github.event.client_payload.docker_compose_b64 != null && github.event.client_payload.docker_compose_b64 != '' }}
         run: |
           echo "${{ github.event.client_payload.docker_compose_b64 }}" | base64 -d > /tmp/docker-compose-raw.yml
 
@@ -107,11 +107,13 @@ jobs:
         env:
           IMAGE_TAG: ${{ github.event.client_payload.image_tag }}
           SHARED_ENV: ${{ github.event.client_payload.env }}
+          ENV_VARS_JSON: ${{ toJson(github.event.client_payload.env_vars) }}
           ENV_SECRETS_JSON: ${{ toJson(github.event.client_payload.env_secrets) }}
         run: |
           python3 ansible/scripts/deployment_resolver.py create-env \
             --image-tag "$IMAGE_TAG" \
             --env "$SHARED_ENV" \
+            --env-vars-json "$ENV_VARS_JSON" \
             --env-secrets-json "$ENV_SECRETS_JSON" \
             --output /tmp/.env
 
@@ -135,7 +137,7 @@ jobs:
             --append
 
       - name: Render final docker-compose
-        if: ${{ contains(fromJson(needs.prepare.outputs.servers_json), matrix.server) }}
+        if: ${{ contains(fromJson(needs.prepare.outputs.servers_json), matrix.server) && github.event.client_payload.docker_compose_b64 != null && github.event.client_payload.docker_compose_b64 != '' }}
         run: |
           docker compose -f /tmp/docker-compose-raw.yml --env-file /tmp/.env config > /tmp/docker-compose.yml
 
@@ -205,5 +207,6 @@ jobs:
             --extra-vars "env=$env" \
             --extra-vars "compose_file=/tmp/docker-compose.yml" \
             --extra-vars "env_file=/tmp/.env" \
+            --extra-vars "image_tag=${{ github.event.client_payload.image_tag }}" \
             --timeout 15 \
             --private-key "$KEY_FILE"

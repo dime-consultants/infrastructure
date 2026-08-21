@@ -1,0 +1,86 @@
+{% set helm_config = deployment_app_env.helm | default({}) %}
+{% set image_config = deployment_app_env.image | default({}) %}
+{% set service_config = deployment_app_env.service | default({}) %}
+{% set ingress_config = deployment_app_env.ingress | default({}) %}
+{% set ingress_tls_config = ingress_config.tls | default({}) %}
+{% set autoscaling_config = deployment_app_env.autoscaling | default({}) %}
+{% set probes_config = deployment_app_env.probes | default({}) %}
+replicaCount: {{ deployment_app_env.replicas | default(helm_config.replicas | default(2)) }}
+
+image:
+  repository: {{ image_config.repository | default((helm_image_tag | regex_replace(':[^:/]+$', ''))) | to_json }}
+  tag: {{ (image_config.tag | default(helm_image_tag | regex_replace('^.+:', ''))) | to_json }}
+  pullPolicy: {{ image_config.pullPolicy | default('IfNotPresent') | to_json }}
+
+command:
+{{ deployment_app_env.command | default([]) | to_nice_yaml(indent=2) | indent(2, true) }}
+
+args:
+{{ deployment_app_env.args | default([]) | to_nice_yaml(indent=2) | indent(2, true) }}
+
+imagePullSecrets:
+{{ deployment_app_env.imagePullSecrets | default([]) | to_nice_yaml(indent=2) | indent(2, true) }}
+
+service:
+  enabled: {{ service_config.enabled | default(true) | bool | ternary('true', 'false') }}
+  type: {{ service_config.type | default('ClusterIP') | to_json }}
+  port: {{ service_config.port | default(80) }}
+  targetPort: {{ service_config.targetPort | default(deployment_app_env.container_port | default(8000)) }}
+{% if service_config.nodePort is defined %}
+  nodePort: {{ service_config.nodePort }}
+{% endif %}
+
+ingress:
+  enabled: {{ ingress_config.enabled | default(false) | bool | ternary('true', 'false') }}
+  className: {{ ingress_config.className | default('traefik') | to_json }}
+  host: {{ deployment_app_env.domain | default('') | to_json }}
+  tls:
+    enabled: {{ ingress_tls_config.enabled | default(false) | bool | ternary('true', 'false') }}
+    secretName: {{ ingress_tls_config.secretName | default('') | to_json }}
+
+env:
+{% for key, value in deployment_app_env.env | default({}) | dictsort %}
+  {{ key }}: {{ value | to_json }}
+{% else %}
+  {}
+{% endfor %}
+
+secretEnv:
+{% for key, value in (deployment_app_env.secret_env | default({}) | combine(helm_dynamic_secret_env | default({}), recursive=True)) | dictsort %}
+  {{ key }}: {{ value | to_json }}
+{% else %}
+  {}
+{% endfor %}
+
+resources:
+{{ deployment_app_env.resources | default({}) | to_nice_yaml(indent=2) | indent(2, true) }}
+
+autoscaling:
+  enabled: {{ autoscaling_config.enabled | default(false) | bool | ternary('true', 'false') }}
+  minReplicas: {{ autoscaling_config.minReplicas | default(2) }}
+  maxReplicas: {{ autoscaling_config.maxReplicas | default(5) }}
+  targetCPUUtilizationPercentage: {{ autoscaling_config.targetCPUUtilizationPercentage | default(70) }}
+
+probes:
+  enabled: {{ probes_config.enabled | default(true) | bool | ternary('true', 'false') }}
+  path: {{ probes_config.path | default('/health') | to_json }}
+  initialDelaySeconds: {{ probes_config.initialDelaySeconds | default(10) }}
+  periodSeconds: {{ probes_config.periodSeconds | default(10) }}
+
+podAnnotations:
+{{ deployment_app_env.podAnnotations | default({}) | to_nice_yaml(indent=2) | indent(2, true) }}
+
+nodeSelector:
+{{ deployment_app_env.nodeSelector | default({}) | to_nice_yaml(indent=2) | indent(2, true) }}
+
+tolerations:
+{{ deployment_app_env.tolerations | default([]) | to_nice_yaml(indent=2) | indent(2, true) }}
+
+affinity:
+{{ deployment_app_env.affinity | default({}) | to_nice_yaml(indent=2) | indent(2, true) }}
+
+volumes:
+{{ deployment_app_env.volumes | default([]) | to_nice_yaml(indent=2) | indent(2, true) }}
+
+volumeMounts:
+{{ deployment_app_env.volumeMounts | default([]) | to_nice_yaml(indent=2) | indent(2, true) }}
