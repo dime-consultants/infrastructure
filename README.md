@@ -135,6 +135,30 @@ apps:
           namespace: prod
 ```
 
+If an image genuinely requires a different user or writable root filesystem,
+override the chart security context for that app. Keep the override as narrow
+as possible:
+
+```yaml
+environments:
+  prod:
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 1001
+      runAsGroup: 1001
+      fsGroup: 1001
+      seccompProfile:
+        type: RuntimeDefault
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+      privileged: false
+      readOnlyRootFilesystem: false
+      runAsNonRoot: true
+```
+
 For a worker with no public HTTP service:
 
 ```yaml
