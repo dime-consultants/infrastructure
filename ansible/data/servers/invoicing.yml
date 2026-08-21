@@ -96,6 +96,8 @@ apps:
           type: ClusterIP
           port: 80
           targetPort: 9455
+        probes:
+          path: /api/health
         ingress:
           enabled: true
           className: traefik
@@ -116,6 +118,8 @@ apps:
           type: ClusterIP
           port: 80
           targetPort: 6001
+        probes:
+          path: /api/health
         ingress:
           enabled: true
           className: traefik
@@ -207,7 +211,9 @@ apps:
         probes:
           path: /
         env:
-          HOME: /home/nextjs
+          HOME: /home/node
+          COREPACK_HOME: /home/node/.cache/node/corepack
+          NEXT_TELEMETRY_DISABLED: "1"
         tmpVolume:
           enabled: false
         volumeMounts:
@@ -216,8 +222,6 @@ apps:
           - mountPath: /var/tmp
             name: var-tmp
           - mountPath: /home/app/.cache
-            name: cache
-          - mountPath: /home/nextjs/.cache
             name: cache
           - mountPath: /home/node/.cache
             name: node-cache
@@ -257,7 +261,9 @@ apps:
         probes:
           path: /
         env:
-          HOME: /home/nextjs
+          HOME: /home/node
+          COREPACK_HOME: /home/node/.cache/node/corepack
+          NEXT_TELEMETRY_DISABLED: "1"
         tmpVolume:
           enabled: false
         volumeMounts:
@@ -266,8 +272,6 @@ apps:
           - mountPath: /var/tmp
             name: var-tmp
           - mountPath: /home/app/.cache
-            name: cache
-          - mountPath: /home/nextjs/.cache
             name: cache
           - mountPath: /home/node/.cache
             name: node-cache
