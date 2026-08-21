@@ -27,7 +27,7 @@
   set_fact:
     helm_release_name: "{{ helm_options.release_name | default((deployment_app.name ~ '-' ~ env) | regex_replace('[^A-Za-z0-9-]', '-')) }}"
     helm_namespace: "{{ helm_options.namespace | default(env) }}"
-    helm_chart_src: "{{ helm_options.chart | default(playbook_dir ~ '/../helm/dime-app') }}"
+    helm_chart_src: "{{ helm_options.chart | default((playbook_dir | dirname) ~ '/helm/dime-app') }}"
     helm_chart_remote_path: "{{ app_dir }}/chart"
     helm_values_file: "{{ app_dir }}/helm-values.yml"
     helm_image_tag: "{{ force_image_tag | default(image_tag | default(image_options.tag | default('latest'))) }}"
