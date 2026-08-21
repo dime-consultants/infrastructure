@@ -35,6 +35,8 @@ tmpVolume:
       mountPath: /var/tmp
     - name: cache
       mountPath: /home/app/.cache
+    - name: node-cache
+      mountPath: /home/node/.cache
 
 service:
   enabled: true

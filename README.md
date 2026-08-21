@@ -187,10 +187,10 @@ environments:
 ```
 
 The default chart keeps the image root filesystem read-only and mounts writable
-`emptyDir` volumes at `/tmp`, `/var/tmp`, and `/home/app/.cache`. If a specific
-app needs another writable path, add it with `tmpVolume.mounts` or a dedicated
-`volumes`/`volumeMounts` entry instead of making the whole image filesystem
-writable.
+`emptyDir` volumes at `/tmp`, `/var/tmp`, `/home/app/.cache`, and
+`/home/node/.cache`. If a specific app needs another writable path, add it with
+`tmpVolume.mounts` or a dedicated `volumes`/`volumeMounts` entry instead of
+making the whole image filesystem writable.
 
 ```yaml
 environments:
