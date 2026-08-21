@@ -6,12 +6,16 @@
     external_route_values_file: "/tmp/external-route-{{ route.domain | regex_replace('[^A-Za-z0-9-]', '-') }}.yml"
 
 - name: Create external route namespace
-  command: >
-    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
-    create namespace {{ external_route_namespace }}
-  register: external_route_namespace_create
-  failed_when: external_route_namespace_create.rc != 0 and 'AlreadyExists' not in external_route_namespace_create.stderr
-  changed_when: external_route_namespace_create.rc == 0
+  shell: |
+    set -eu
+    cat <<'EOF' | /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }} apply -f -
+    apiVersion: v1
+    kind: Namespace
+    metadata:
+      name: {{ external_route_namespace }}
+    EOF
+  register: external_route_namespace_apply
+  changed_when: "'created' in external_route_namespace_apply.stdout or 'configured' in external_route_namespace_apply.stdout"
 
 - name: Render external route values
   template:
@@ -21,7 +25,7 @@
 
 - name: Deploy external route
   command: >
-    helm upgrade --install {{ external_route_release }} {{ playbook_dir }}/../helm/external-route
+    /usr/local/bin/helm upgrade --install {{ external_route_release }} {{ playbook_dir }}/../helm/external-route
     --namespace {{ external_route_namespace }}
     --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
     --values {{ external_route_values_file }}

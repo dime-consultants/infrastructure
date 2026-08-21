@@ -31,13 +31,49 @@
     helm_values_file: "{{ app_dir }}/helm-values.yml"
     helm_image_tag: "{{ force_image_tag | default(image_tag | default(image_options.tag | default('latest'))) }}"
 
-- name: Create Kubernetes namespace
+- name: Check K3s binary before Helm deploy
+  stat:
+    path: /usr/local/bin/k3s
+  register: helm_k3s_binary
+
+- name: Check K3s kubeconfig before Helm deploy
+  stat:
+    path: "{{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}"
+  register: helm_k3s_kubeconfig
+
+- name: Check Helm binary before Helm deploy
+  stat:
+    path: /usr/local/bin/helm
+  register: helm_binary_for_deploy
+
+- name: Validate K3s and Helm are ready for app deployment
+  assert:
+    that:
+      - helm_k3s_binary.stat.exists
+      - helm_k3s_kubeconfig.stat.exists
+      - helm_binary_for_deploy.stat.exists
+    fail_msg: >-
+      This app is configured for deployment_type={{ deployment_runtime }}, but K3s/Helm is not ready on the target host.
+      Run the base configure workflow for {{ inventory_hostname }} first, then rerun this app deployment.
+
+- name: Verify Kubernetes API before Helm deploy
   command: >
     /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
-    create namespace {{ helm_namespace }}
-  register: namespace_create
-  failed_when: namespace_create.rc != 0 and 'AlreadyExists' not in namespace_create.stderr
-  changed_when: namespace_create.rc == 0
+    get nodes
+  register: helm_k3s_nodes
+  changed_when: false
+
+- name: Create or update Kubernetes namespace
+  shell: |
+    set -eu
+    cat <<'EOF' | /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }} apply -f -
+    apiVersion: v1
+    kind: Namespace
+    metadata:
+      name: {{ helm_namespace }}
+    EOF
+  register: namespace_apply
+  changed_when: "'created' in namespace_apply.stdout or 'configured' in namespace_apply.stdout"
 
 - name: Render Helm values
   template:
@@ -49,7 +85,7 @@
 
 - name: Deploy Helm release
   command: >
-    helm upgrade --install {{ helm_release_name }} {{ helm_chart_path }}
+    /usr/local/bin/helm upgrade --install {{ helm_release_name }} {{ helm_chart_path }}
     --namespace {{ helm_namespace }}
     --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
     --values {{ helm_values_file }}
