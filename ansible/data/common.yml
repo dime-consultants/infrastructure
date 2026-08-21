@@ -9,6 +9,17 @@ nginx_packages:
   - certbot
   - python3-certbot-nginx
 
+certbot:
+  enabled: true
+  email: admin@mchangohub.com
+  webroot: /var/www/letsencrypt
+  retries: 3
+  retry_delay: 20
+  fail_on_error: false
+  keep_until_expiring: true
+  staging: false
+  renewal_reload_service: nginx
+
 security_baseline:
   unattended_upgrades: true
   fail2ban: true

@@ -34,6 +34,7 @@ k3s:
   install_helm: true
   traefik_acme:
     enabled: true
+    email: admin@mchangohub.com
     resolver_name: letsencrypt
     storage: /data/acme.json
   firewall_ports:

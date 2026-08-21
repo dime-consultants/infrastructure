@@ -76,6 +76,32 @@ k3s:
     - traefik
 ```
 
+## SSL Certificates
+
+Host Nginx mode uses certbot with the webroot challenge. Base setup renders
+temporary HTTP configs, issues/renews certificates, installs a renewal reload
+hook, then enables HTTPS only for domains with valid cert files. Configure it
+globally or per server:
+
+```yaml
+certbot:
+  enabled: true
+  email: admin@example.com
+  webroot: /var/www/letsencrypt
+  fail_on_error: false
+```
+
+K3s mode does not run certbot because Traefik owns ports 80/443. Use Traefik
+ACME there:
+
+```yaml
+k3s:
+  traefik_acme:
+    enabled: true
+    email: admin@example.com
+    resolver_name: letsencrypt
+```
+
 ## Compose App
 
 Use Compose when the app repository sends `docker_compose_b64`.

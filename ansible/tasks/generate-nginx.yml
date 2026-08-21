@@ -93,14 +93,71 @@
   set_fact:
     all_domains: "{{ (app_domains + extra_only_domains) | unique }}"
 
+- name: Resolve certbot settings
+  set_fact:
+    certbot_config: "{{ certbot | default({}) }}"
+    certbot_enabled: "{{ (certbot | default({})).enabled | default(true) | bool }}"
+    certbot_webroot: "{{ (certbot | default({})).webroot | default('/var/www/letsencrypt') }}"
+    certbot_email: "{{ lookup('env', 'CERTBOT_EMAIL') | default((certbot | default({})).email | default('admin@mchangohub.com'), true) }}"
+    certbot_retries: "{{ (certbot | default({})).retries | default(3) }}"
+    certbot_retry_delay: "{{ (certbot | default({})).retry_delay | default(20) }}"
+    certbot_fail_on_error: "{{ (certbot | default({})).fail_on_error | default(false) | bool }}"
+    certbot_keep_until_expiring: "{{ (certbot | default({})).keep_until_expiring | default(true) | bool }}"
+    certbot_staging: "{{ (certbot | default({})).staging | default(false) | bool }}"
+    certbot_renewal_reload_service: "{{ (certbot | default({})).renewal_reload_service | default('nginx') }}"
+
+- name: Split certbot-compatible domains
+  set_fact:
+    certbot_domains: "{{ all_domains | reject('match', '^\\*\\.') | list }}"
+    certbot_unsupported_domains: "{{ all_domains | select('match', '^\\*\\.') | list }}"
+
+- name: Report domains skipped by certbot webroot
+  debug:
+    msg: "Skipping wildcard domains because certbot webroot/http-01 cannot issue them: {{ certbot_unsupported_domains | join(', ') }}"
+  when:
+    - certbot_enabled | bool
+    - certbot_unsupported_domains | length > 0
+
 - name: Ensure ACME challenge directories exist
   file:
-    path: /var/www/letsencrypt/.well-known/acme-challenge
+    path: "{{ certbot_webroot }}/.well-known/acme-challenge"
     state: directory
     owner: www-data
     group: www-data
     mode: "0755"
     recurse: yes
+  when: certbot_enabled | bool
+
+- name: Configure certbot renewal deploy hook directory
+  file:
+    path: /etc/letsencrypt/renewal-hooks/deploy
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: certbot_enabled | bool
+
+- name: Configure certbot renewal reload hook
+  copy:
+    dest: /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
+    owner: root
+    group: root
+    mode: "0755"
+    content: |
+      #!/bin/sh
+      set -eu
+      if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet {{ certbot_renewal_reload_service }}; then
+        systemctl reload {{ certbot_renewal_reload_service }}
+      fi
+  when: certbot_enabled | bool
+
+- name: Ensure certbot renewal timer is enabled
+  service:
+    name: certbot.timer
+    state: started
+    enabled: true
+  failed_when: false
+  when: certbot_enabled | bool
 
 - name: Generate HTTP configs for apps
   include_tasks: generate-nginx-app.yml
@@ -153,17 +210,62 @@
 - name: Obtain certificates via webroot
   command: >
     certbot certonly
-    --webroot -w /var/www/letsencrypt
+    --webroot
+    --webroot-path {{ certbot_webroot }}
     -d {{ item }}
-    --non-interactive --agree-tos --email admin@mchangohub.com
-  loop: "{{ all_domains }}"
-  register: certbot
-  ignore_errors: yes
+    --non-interactive
+    --agree-tos
+    --email {{ certbot_email }}
+    --preferred-challenges http
+    {{ '--keep-until-expiring' if certbot_keep_until_expiring | bool else '--force-renewal' }}
+    {{ '--staging' if certbot_staging | bool else '' }}
+  loop: "{{ certbot_domains }}"
+  register: certbot_issue_result
+  changed_when: >-
+    'Successfully received certificate' in (certbot_issue_result.stdout | default('')) or
+    'Congratulations' in (certbot_issue_result.stdout | default(''))
+  failed_when: false
+  retries: "{{ certbot_retries }}"
+  delay: "{{ certbot_retry_delay }}"
+  until: certbot_issue_result.rc == 0
+  loop_control:
+    loop_var: item
+  when:
+    - certbot_enabled | bool
+    - certbot_domains | length > 0
+
+- name: Build list of certbot issuance failures
+  set_fact:
+    certbot_failed_domains: >-
+      {{
+        certbot_issue_result.results | default([])
+        | rejectattr('rc', 'equalto', 0)
+        | map(attribute='item')
+        | list
+      }}
+  when: certbot_enabled | bool
+
+- name: Report certbot issuance failures
+  debug:
+    msg: >-
+      Certbot could not issue certificates for these domains: {{ certbot_failed_domains | default([]) | join(', ') }}.
+      The pipeline will continue and only enable HTTPS for domains with existing certificates.
+  when:
+    - certbot_enabled | bool
+    - certbot_failed_domains | default([]) | length > 0
+
+- name: Fail when certbot issuance is required
+  fail:
+    msg: "Certbot failed for required domains: {{ certbot_failed_domains | join(', ') }}"
+  when:
+    - certbot_enabled | bool
+    - certbot_fail_on_error | bool
+    - certbot_failed_domains | default([]) | length > 0
 
 - name: Check which domains have certificates
   stat:
     path: "/etc/letsencrypt/live/{{ item }}/fullchain.pem"
-  loop: "{{ all_domains }}"
+  loop: "{{ certbot_domains if certbot_enabled | bool else [] }}"
   register: cert_stats
 
 - name: Build list of SSL-ready domains

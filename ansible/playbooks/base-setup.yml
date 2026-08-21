@@ -318,7 +318,7 @@
 
     - name: Create web root for certbot
       file:
-        path: /var/www/letsencrypt
+        path: "{{ (certbot | default({})).webroot | default('/var/www/letsencrypt') }}"
         state: directory
         mode: '0755'
       when: effective_nginx_enabled | bool

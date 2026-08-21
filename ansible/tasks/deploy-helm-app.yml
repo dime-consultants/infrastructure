@@ -33,6 +33,11 @@
     helm_image_tag: "{{ force_image_tag | default(image_tag | default(image_options.tag | default('latest'))) }}"
     helm_timeout: "{{ helm_options.timeout | default('15m') }}"
     helm_history_max: "{{ helm_options.history_max | default(10) }}"
+    helm_self_heal_enabled: "{{ helm_options.self_heal_enabled | default(true) | bool }}"
+    helm_self_heal_retries: "{{ helm_options.self_heal_retries | default(2) }}"
+    helm_self_heal_retry_delay: "{{ helm_options.self_heal_retry_delay | default(20) }}"
+    helm_self_heal_disk_cleanup_percent: "{{ helm_options.self_heal_disk_cleanup_percent | default(88) }}"
+    helm_rollout_timeout: "{{ helm_options.rollout_timeout | default(helm_options.timeout | default('15m')) }}"
 
 - name: Check K3s binary before Helm deploy
   stat:
@@ -148,6 +153,134 @@
       changed_when: "'Release' in helm_deploy.stdout or 'deployed' in helm_deploy.stdout or 'upgraded' in helm_deploy.stdout"
 
   rescue:
+    - name: Preserve initial Helm deployment failure
+      set_fact:
+        helm_initial_deploy_stderr: "{{ helm_deploy.stderr | default('') }}"
+        helm_initial_deploy_stdout: "{{ helm_deploy.stdout | default('') }}"
+        helm_initial_deploy_rc: "{{ helm_deploy.rc | default('unknown') }}"
+
+    - name: Self-heal Kubernetes state after failed Helm deploy
+      shell: |
+        set -u
+
+        KUBECTL="/usr/local/bin/k3s kubectl --kubeconfig ${KUBECONFIG_PATH}"
+        HELM="/usr/local/bin/helm --kubeconfig ${KUBECONFIG_PATH}"
+        RELEASE="${HELM_RELEASE_NAME}"
+        NAMESPACE="${HELM_NAMESPACE}"
+        SELECTOR="app.kubernetes.io/instance=${RELEASE}"
+        ROLLOUT_TIMEOUT="${HELM_ROLLOUT_TIMEOUT}"
+
+        echo "Initial Helm failure rc=${HELM_INITIAL_DEPLOY_RC}"
+        echo "Initial Helm stderr:"
+        printf '%s\n' "${HELM_INITIAL_DEPLOY_STDERR}"
+
+        echo "Checking K3s API health"
+        if ! ${KUBECTL} get --raw=/readyz >/tmp/helm-readyz.out 2>/tmp/helm-readyz.err; then
+          cat /tmp/helm-readyz.err || true
+          if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet k3s; then
+            echo "K3s API is not ready; restarting k3s"
+            systemctl restart k3s
+          fi
+        fi
+
+        for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+          if ${KUBECTL} get nodes >/dev/null 2>&1; then
+            break
+          fi
+          echo "Waiting for K3s API after remediation attempt ${attempt}/12"
+          sleep 5
+        done
+
+        echo "Node and capacity snapshot"
+        ${KUBECTL} get nodes -o wide || true
+        df -h / /var/lib/rancher/k3s /var/lib/kubelet 2>/dev/null || df -h / || true
+        df -ih / /var/lib/rancher/k3s /var/lib/kubelet 2>/dev/null || df -ih / || true
+
+        max_disk_usage="$(
+          df -P / /var/lib/rancher/k3s /var/lib/kubelet 2>/dev/null |
+            awk 'NR > 1 { gsub("%", "", $5); if ($5 > max) max=$5 } END { print max + 0 }'
+        )"
+        max_inode_usage="$(
+          df -Pi / /var/lib/rancher/k3s /var/lib/kubelet 2>/dev/null |
+            awk 'NR > 1 { gsub("%", "", $5); if ($5 > max) max=$5 } END { print max + 0 }'
+        )"
+        if [ "${max_disk_usage:-0}" -ge "${HELM_SELF_HEAL_DISK_CLEANUP_PERCENT}" ] || [ "${max_inode_usage:-0}" -ge "${HELM_SELF_HEAL_DISK_CLEANUP_PERCENT}" ]; then
+          echo "Disk or inode pressure detected; pruning unused K3s images and vacuuming logs"
+          /usr/local/bin/k3s crictl rmi --prune || true
+          journalctl --vacuum-size=300M || true
+          df -h / /var/lib/rancher/k3s /var/lib/kubelet 2>/dev/null || df -h / || true
+          df -ih / /var/lib/rancher/k3s /var/lib/kubelet 2>/dev/null || df -ih / || true
+        fi
+
+        echo "Deleting failed or evicted release pods"
+        ${KUBECTL} delete pod -n "${NAMESPACE}" -l "${SELECTOR}" --field-selector=status.phase=Failed --ignore-not-found --wait=false || true
+
+        echo "Checking current Helm status"
+        release_status="$(${HELM} status "${RELEASE}" -n "${NAMESPACE}" -o json 2>/dev/null | python3 -c 'import json,sys; print((json.load(sys.stdin).get("info") or {}).get("status","unknown"))' 2>/dev/null || printf missing)"
+        echo "Helm status is ${release_status}"
+
+        if [ "${release_status}" = "pending-install" ] || [ "${release_status}" = "pending-upgrade" ] || [ "${release_status}" = "pending-rollback" ]; then
+          echo "Removing stale pending Helm release lock"
+          ${HELM} uninstall "${RELEASE}" -n "${NAMESPACE}" --wait --timeout "${ROLLOUT_TIMEOUT}" || true
+        elif [ "${release_status}" = "failed" ]; then
+          deployed_revision="$(${HELM} history "${RELEASE}" -n "${NAMESPACE}" -o json 2>/dev/null | python3 -c 'import json,sys; rows=json.load(sys.stdin); deployed=[r for r in rows if r.get("status")=="deployed"]; print(deployed[-1]["revision"] if deployed else "")' 2>/dev/null || true)"
+          if [ -n "${deployed_revision}" ]; then
+            echo "Rolling back failed release to last deployed revision ${deployed_revision}"
+            ${HELM} rollback "${RELEASE}" "${deployed_revision}" -n "${NAMESPACE}" --wait --timeout "${ROLLOUT_TIMEOUT}" || true
+          else
+            echo "Failed release has no deployed revision; uninstalling before retry"
+            ${HELM} uninstall "${RELEASE}" -n "${NAMESPACE}" --wait --timeout "${ROLLOUT_TIMEOUT}" || true
+          fi
+        fi
+
+        echo "Restarting current release deployments when present"
+        if ${KUBECTL} get deploy -n "${NAMESPACE}" -l "${SELECTOR}" --no-headers 2>/dev/null | grep -q .; then
+          ${KUBECTL} rollout restart deploy -n "${NAMESPACE}" -l "${SELECTOR}" || true
+          ${KUBECTL} rollout status deploy -n "${NAMESPACE}" -l "${SELECTOR}" --timeout="${ROLLOUT_TIMEOUT}" || true
+        fi
+
+        echo "Self-heal snapshot after remediation"
+        ${KUBECTL} get pods,deployments,replicasets,services,ingress -n "${NAMESPACE}" -l "${SELECTOR}" -o wide || true
+        ${KUBECTL} get events -n "${NAMESPACE}" --sort-by=.lastTimestamp | tail -n 60 || true
+      args:
+        executable: /bin/bash
+      environment:
+        KUBECONFIG_PATH: "{{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}"
+        HELM_RELEASE_NAME: "{{ helm_release_name }}"
+        HELM_NAMESPACE: "{{ helm_namespace }}"
+        HELM_ROLLOUT_TIMEOUT: "{{ helm_rollout_timeout }}"
+        HELM_SELF_HEAL_DISK_CLEANUP_PERCENT: "{{ helm_self_heal_disk_cleanup_percent }}"
+        HELM_INITIAL_DEPLOY_RC: "{{ helm_initial_deploy_rc }}"
+        HELM_INITIAL_DEPLOY_STDERR: "{{ helm_initial_deploy_stderr }}"
+      register: helm_self_heal
+      changed_when: >-
+        'restarting k3s' in (helm_self_heal.stdout | lower) or
+        'uninstalling' in (helm_self_heal.stdout | lower) or
+        'rolling back' in (helm_self_heal.stdout | lower) or
+        'disk or inode pressure detected' in (helm_self_heal.stdout | lower) or
+        'deleted' in (helm_self_heal.stdout | lower) or
+        'restarted' in (helm_self_heal.stdout | lower)
+      failed_when: false
+      when: helm_self_heal_enabled | bool
+
+    - name: Retry Helm release after self-heal
+      command: >
+        /usr/local/bin/helm upgrade --install {{ helm_release_name }} {{ helm_chart_deploy_path }}
+        --namespace {{ helm_namespace }}
+        --create-namespace
+        --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+        --values {{ helm_values_file }}
+        --wait
+        --timeout {{ helm_timeout }}
+        --history-max {{ helm_history_max }}
+      register: helm_deploy_retry
+      changed_when: "'Release' in helm_deploy_retry.stdout or 'deployed' in helm_deploy_retry.stdout or 'upgraded' in helm_deploy_retry.stdout"
+      failed_when: false
+      retries: "{{ helm_self_heal_retries }}"
+      delay: "{{ helm_self_heal_retry_delay }}"
+      until: helm_deploy_retry.rc == 0
+      when: helm_self_heal_enabled | bool
+
     - name: Collect Helm release status after failed deploy
       command: >
         /usr/local/bin/helm status {{ helm_release_name }}
@@ -156,6 +289,7 @@
       register: helm_failed_status
       changed_when: false
       failed_when: false
+      when: not (helm_self_heal_enabled | bool) or (helm_deploy_retry.rc | default(1)) != 0
 
     - name: Collect Kubernetes workload status after failed Helm deploy
       command: >
@@ -167,6 +301,7 @@
       register: helm_failed_workloads
       changed_when: false
       failed_when: false
+      when: not (helm_self_heal_enabled | bool) or (helm_deploy_retry.rc | default(1)) != 0
 
     - name: Collect Kubernetes pod descriptions after failed Helm deploy
       command: >
@@ -177,6 +312,7 @@
       register: helm_failed_pod_descriptions
       changed_when: false
       failed_when: false
+      when: not (helm_self_heal_enabled | bool) or (helm_deploy_retry.rc | default(1)) != 0
 
     - name: Collect Kubernetes pod logs after failed Helm deploy
       command: >
@@ -189,6 +325,7 @@
       register: helm_failed_pod_logs
       changed_when: false
       failed_when: false
+      when: not (helm_self_heal_enabled | bool) or (helm_deploy_retry.rc | default(1)) != 0
 
     - name: Collect recent Kubernetes namespace events after failed Helm deploy
       command: >
@@ -199,16 +336,26 @@
       register: helm_failed_events
       changed_when: false
       failed_when: false
+      when: not (helm_self_heal_enabled | bool) or (helm_deploy_retry.rc | default(1)) != 0
 
     - name: Fail with Helm deployment diagnostics
       fail:
         msg: |
           Helm deployment failed for release {{ helm_release_name }} in namespace {{ helm_namespace }}.
-          Helm command stderr:
-          {{ helm_deploy.stderr | default('') }}
+          Initial Helm command stderr:
+          {{ helm_initial_deploy_stderr | default('') }}
 
-          Helm command stdout:
-          {{ helm_deploy.stdout | default('') }}
+          Initial Helm command stdout:
+          {{ helm_initial_deploy_stdout | default('') }}
+
+          Self-heal output:
+          {{ helm_self_heal.stdout | default('self-heal disabled or unavailable') }}
+
+          Retry Helm command stderr:
+          {{ helm_deploy_retry.stderr | default('') }}
+
+          Retry Helm command stdout:
+          {{ helm_deploy_retry.stdout | default('') }}
 
           Helm status:
           {{ helm_failed_status.stdout | default(helm_failed_status.stderr | default('unavailable')) }}
@@ -224,3 +371,4 @@
 
           Recent namespace events:
           {{ helm_failed_events.stdout | default(helm_failed_events.stderr | default('unavailable')) }}
+      when: not (helm_self_heal_enabled | bool) or (helm_deploy_retry.rc | default(1)) != 0

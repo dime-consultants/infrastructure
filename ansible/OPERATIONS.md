@@ -179,6 +179,22 @@ apps:
 K3s includes Traefik by default when it is not listed under `k3s.disable`.
 Traefik handles ingress routing and Kubernetes Services load balance across
 healthy pods.
+
+SSL is runtime-specific. Host Nginx mode uses certbot webroot certificates and
+installs a renewal hook that reloads Nginx after successful renewals. K3s mode
+uses Traefik ACME instead, because Traefik owns ports 80 and 443.
+
+```yaml
+certbot:
+  enabled: true
+  email: admin@example.com
+
+k3s:
+  traefik_acme:
+    enabled: true
+    email: admin@example.com
+```
+
 Application secrets should be provided through GitHub Secrets or inventory
 secret references and rendered into Kubernetes Secrets by Helm; do not commit
 secret values.
