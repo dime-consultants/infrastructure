@@ -180,6 +180,20 @@ K3s includes Traefik by default when it is not listed under `k3s.disable`.
 Traefik handles ingress routing and Kubernetes Services load balance across
 healthy pods.
 
+App deploys can bootstrap K3s and Helm directly if base setup has not prepared
+the server yet. Helm deploy failures are non-fatal by default after diagnostics
+and retry/self-heal attempts; set `helm.fail_on_error: true` for strict release
+gates.
+
+```yaml
+helm:
+  bootstrap_enabled: true
+  fail_on_error: false
+  timeout: 45m
+  self_heal_enabled: true
+  self_heal_retries: 3
+```
+
 SSL is runtime-specific. Host Nginx mode uses certbot webroot certificates and
 installs a renewal hook that reloads Nginx after successful renewals. K3s mode
 uses Traefik ACME instead, because Traefik owns ports 80 and 443.

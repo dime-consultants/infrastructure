@@ -4,12 +4,24 @@
     path: /usr/local/bin/k3s
   register: k3s_binary
 
+- name: Refresh apt cache before K3s bootstrap
+  command: apt-get update
+  register: k3s_apt_update_result
+  changed_when: false
+  retries: 5
+  delay: 10
+  until: k3s_apt_update_result.rc == 0
+
 - name: Install K3s installer dependencies
   apt:
     name:
       - ca-certificates
       - curl
     state: present
+  register: k3s_dependency_install
+  retries: 5
+  delay: 10
+  until: k3s_dependency_install is succeeded
 
 - name: Build K3s install arguments
   set_fact:
@@ -24,6 +36,10 @@
   shell: "curl -sfL {{ k3s.install_script_url | default('https://get.k3s.io') }} | INSTALL_K3S_CHANNEL={{ k3s.channel | default('stable') }} INSTALL_K3S_EXEC='{{ k3s_install_exec }}' sh -"
   args:
     creates: /usr/local/bin/k3s
+  register: k3s_install_result
+  retries: 3
+  delay: 20
+  until: k3s_install_result.rc == 0
   when: not k3s_binary.stat.exists
 
 - name: Read existing K3s systemd unit
@@ -40,6 +56,9 @@
     - "'--disable' in (k3s_service_unit.content | b64decode)"
     - "'traefik' in (k3s_service_unit.content | b64decode)"
   register: k3s_reconfigured
+  retries: 3
+  delay: 20
+  until: k3s_reconfigured.rc == 0
 
 - name: Ensure K3s service is started and enabled
   service:
@@ -96,6 +115,10 @@
   shell: "curl -fsSL {{ k3s.helm_install_script_url | default('https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3') }} | bash"
   args:
     creates: /usr/local/bin/helm
+  register: helm_install_result
+  retries: 3
+  delay: 20
+  until: helm_install_result.rc == 0
   when:
     - k3s.install_helm | default(true) | bool
     - not helm_binary.stat.exists

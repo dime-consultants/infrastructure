@@ -31,13 +31,15 @@
     helm_chart_deploy_path: "{{ app_dir }}/chart"
     helm_values_file: "{{ app_dir }}/helm-values.yml"
     helm_image_tag: "{{ force_image_tag | default(image_tag | default(image_options.tag | default('latest'))) }}"
-    helm_timeout: "{{ helm_options.timeout | default('15m') }}"
+    helm_timeout: "{{ helm_options.timeout | default('45m') }}"
     helm_history_max: "{{ helm_options.history_max | default(10) }}"
+    helm_bootstrap_enabled: "{{ helm_options.bootstrap_enabled | default(true) | bool }}"
+    helm_fail_on_error: "{{ helm_options.fail_on_error | default(false) | bool }}"
     helm_self_heal_enabled: "{{ helm_options.self_heal_enabled | default(true) | bool }}"
-    helm_self_heal_retries: "{{ helm_options.self_heal_retries | default(2) }}"
-    helm_self_heal_retry_delay: "{{ helm_options.self_heal_retry_delay | default(20) }}"
+    helm_self_heal_retries: "{{ helm_options.self_heal_retries | default(3) }}"
+    helm_self_heal_retry_delay: "{{ helm_options.self_heal_retry_delay | default(30) }}"
     helm_self_heal_disk_cleanup_percent: "{{ helm_options.self_heal_disk_cleanup_percent | default(88) }}"
-    helm_rollout_timeout: "{{ helm_options.rollout_timeout | default(helm_options.timeout | default('15m')) }}"
+    helm_rollout_timeout: "{{ helm_options.rollout_timeout | default(helm_options.timeout | default('45m')) }}"
 
 - name: Check K3s binary before Helm deploy
   stat:
@@ -54,6 +56,35 @@
     path: /usr/local/bin/helm
   register: helm_binary_for_deploy
 
+- name: Bootstrap K3s and Helm before app deploy when missing
+  block:
+    - name: Install or repair K3s and Helm
+      include_tasks: "{{ playbook_dir }}/../tasks/install-k3s.yml"
+  rescue:
+    - name: Report non-fatal K3s/Helm bootstrap failure
+      debug:
+        msg: >-
+          K3s/Helm bootstrap failed on {{ inventory_hostname }}, but deploy will continue to collect diagnostics.
+          If runtime files are still missing, deployment will be skipped unless helm.fail_on_error=true.
+  when:
+    - helm_bootstrap_enabled | bool
+    - not helm_k3s_binary.stat.exists or not helm_k3s_kubeconfig.stat.exists or not helm_binary_for_deploy.stat.exists
+
+- name: Re-check K3s binary after bootstrap
+  stat:
+    path: /usr/local/bin/k3s
+  register: helm_k3s_binary
+
+- name: Re-check K3s kubeconfig after bootstrap
+  stat:
+    path: "{{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}"
+  register: helm_k3s_kubeconfig
+
+- name: Re-check Helm binary after bootstrap
+  stat:
+    path: /usr/local/bin/helm
+  register: helm_binary_for_deploy
+
 - name: Validate K3s and Helm are ready for app deployment
   assert:
     that:
@@ -62,26 +93,84 @@
       - helm_binary_for_deploy.stat.exists
     fail_msg: >-
       This app is configured for deployment_type={{ deployment_runtime }}, but K3s/Helm is not ready on the target host.
-      Run the base configure workflow for {{ inventory_hostname }} first, then rerun this app deployment.
+      App deploy attempted bootstrap={{ helm_bootstrap_enabled }}, but the runtime is still unavailable.
+      Check network access to K3s/Helm installers, systemd status, and disk space on {{ inventory_hostname }}.
+  when: helm_fail_on_error | bool
 
-- name: Verify Kubernetes API before Helm deploy
-  command: >
-    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
-    get nodes
-  register: helm_k3s_nodes
-  changed_when: false
+- name: Report missing K3s or Helm and skip Helm deployment without failing pipeline
+  debug:
+    msg: >-
+      K3s/Helm is not ready on {{ inventory_hostname }} after bootstrap.
+      k3s={{ helm_k3s_binary.stat.exists }}, kubeconfig={{ helm_k3s_kubeconfig.stat.exists }},
+      helm={{ helm_binary_for_deploy.stat.exists }}. Skipping Helm deployment because helm.fail_on_error=false.
+  when:
+    - not helm_fail_on_error | bool
+    - not helm_k3s_binary.stat.exists or not helm_k3s_kubeconfig.stat.exists or not helm_binary_for_deploy.stat.exists
 
-- name: Create or update Kubernetes namespace
-  shell: |
-    set -eu
-    cat <<'EOF' | /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }} apply -f -
-    apiVersion: v1
-    kind: Namespace
-    metadata:
-      name: {{ helm_namespace }}
-    EOF
-  register: namespace_apply
-  changed_when: "'created' in namespace_apply.stdout or 'configured' in namespace_apply.stdout"
+- name: End host cleanly when runtime is unavailable and failures are non-fatal
+  meta: end_host
+  when:
+    - not helm_fail_on_error | bool
+    - not helm_k3s_binary.stat.exists or not helm_k3s_kubeconfig.stat.exists or not helm_binary_for_deploy.stat.exists
+
+- name: Continue Helm deployment only when runtime is available
+  block:
+
+    - name: Verify Kubernetes API before Helm deploy
+      command: >
+        /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+        get nodes
+      register: helm_k3s_nodes
+      changed_when: false
+      failed_when: false
+
+    - name: Restart K3s when Kubernetes API is not ready
+      service:
+        name: k3s
+        state: restarted
+      when: helm_k3s_nodes.rc != 0
+
+    - name: Wait for Kubernetes API after automatic restart
+      command: >
+        /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+        get nodes
+      register: helm_k3s_nodes_after_restart
+      changed_when: false
+      failed_when: false
+      retries: 30
+      delay: 10
+      until: helm_k3s_nodes_after_restart.rc == 0
+      ignore_errors: true
+      when: helm_k3s_nodes.rc != 0
+
+    - name: Report unavailable Kubernetes API after restart
+      debug:
+        msg: >-
+          Kubernetes API is still unavailable after automatic K3s restart on {{ inventory_hostname }}.
+          Skipping Helm deployment because helm.fail_on_error=false.
+      when:
+        - not helm_fail_on_error | bool
+        - helm_k3s_nodes.rc != 0
+        - helm_k3s_nodes_after_restart.rc | default(1) != 0
+
+    - name: End host cleanly when Kubernetes API remains unavailable
+      meta: end_host
+      when:
+        - not helm_fail_on_error | bool
+        - helm_k3s_nodes.rc != 0
+        - helm_k3s_nodes_after_restart.rc | default(1) != 0
+
+    - name: Create or update Kubernetes namespace
+      shell: |
+        set -eu
+        cat <<'EOF' | /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }} apply -f -
+        apiVersion: v1
+        kind: Namespace
+        metadata:
+          name: {{ helm_namespace }}
+        EOF
+      register: namespace_apply
+      changed_when: "'created' in namespace_apply.stdout or 'configured' in namespace_apply.stdout"
 
 - name: Render Helm values
   template:
@@ -279,6 +368,7 @@
       retries: "{{ helm_self_heal_retries }}"
       delay: "{{ helm_self_heal_retry_delay }}"
       until: helm_deploy_retry.rc == 0
+      ignore_errors: true
       when: helm_self_heal_enabled | bool
 
     - name: Collect Helm release status after failed deploy
@@ -338,6 +428,44 @@
       failed_when: false
       when: not (helm_self_heal_enabled | bool) or (helm_deploy_retry.rc | default(1)) != 0
 
+    - name: Report non-fatal Helm deployment diagnostics
+      debug:
+        msg: |
+          Helm deployment did not become ready for release {{ helm_release_name }} in namespace {{ helm_namespace }}.
+          Continuing pipeline because helm.fail_on_error=false.
+          Initial Helm command stderr:
+          {{ helm_initial_deploy_stderr | default('') }}
+
+          Initial Helm command stdout:
+          {{ helm_initial_deploy_stdout | default('') }}
+
+          Self-heal output:
+          {{ helm_self_heal.stdout | default('self-heal disabled or unavailable') }}
+
+          Retry Helm command stderr:
+          {{ helm_deploy_retry.stderr | default('') }}
+
+          Retry Helm command stdout:
+          {{ helm_deploy_retry.stdout | default('') }}
+
+          Helm status:
+          {{ helm_failed_status.stdout | default(helm_failed_status.stderr | default('unavailable')) }}
+
+          Workloads:
+          {{ helm_failed_workloads.stdout | default(helm_failed_workloads.stderr | default('unavailable')) }}
+
+          Pod descriptions:
+          {{ helm_failed_pod_descriptions.stdout | default(helm_failed_pod_descriptions.stderr | default('unavailable')) }}
+
+          Pod logs:
+          {{ helm_failed_pod_logs.stdout | default(helm_failed_pod_logs.stderr | default('unavailable')) }}
+
+          Recent namespace events:
+          {{ helm_failed_events.stdout | default(helm_failed_events.stderr | default('unavailable')) }}
+      when:
+        - not helm_fail_on_error | bool
+        - not (helm_self_heal_enabled | bool) or (helm_deploy_retry.rc | default(1)) != 0
+
     - name: Fail with Helm deployment diagnostics
       fail:
         msg: |
@@ -371,4 +499,6 @@
 
           Recent namespace events:
           {{ helm_failed_events.stdout | default(helm_failed_events.stderr | default('unavailable')) }}
-      when: not (helm_self_heal_enabled | bool) or (helm_deploy_retry.rc | default(1)) != 0
+      when:
+        - helm_fail_on_error | bool
+        - not (helm_self_heal_enabled | bool) or (helm_deploy_retry.rc | default(1)) != 0
