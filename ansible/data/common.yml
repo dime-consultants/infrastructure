@@ -1,11 +1,13 @@
 common_packages:
-  - nginx
   - ufw
-  - certbot
-  - python3-certbot-nginx
   - python3-docker
   - fail2ban
   - unattended-upgrades
+
+nginx_packages:
+  - nginx
+  - certbot
+  - python3-certbot-nginx
 
 security_baseline:
   unattended_upgrades: true
@@ -47,9 +49,10 @@ k3s:
   install_script_url: https://get.k3s.io
   kubeconfig_path: /etc/rancher/k3s/k3s.yaml
   write_kubeconfig_mode: "0644"
-  disable:
-    - traefik
+  disable: []
   install_helm: true
   helm_install_script_url: https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
   firewall_ports:
+    - 80
+    - 443
     - 6443

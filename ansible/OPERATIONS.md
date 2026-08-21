@@ -141,12 +141,12 @@ K3s installation is opt-in per server:
 k3s:
   enabled: true
   channel: stable
-  disable:
-    - traefik
+  disable: []
 ```
 
-The default disables Traefik so it does not fight host Nginx for ports 80/443.
-Use `disable: []` only if Kubernetes ingress should own those ports.
+When `k3s.enabled: true`, K3s/Traefik owns ports 80 and 443 by default and host
+Nginx is stopped/disabled by base setup. If a K3s server must keep host Nginx,
+set `nginx_enabled: true` and disable Traefik.
 
 Apps can deploy through the reusable Helm chart at
 `ansible/helm/dime-app`:
@@ -165,21 +165,20 @@ apps:
         replicas: 3
         container_port: 8000
         service:
-          type: NodePort
+          type: ClusterIP
           port: 80
           targetPort: 8000
-          nodePort: 31080
-        nginx_managed: true
-        port: 31080
-        backends:
-          - host: 127.0.0.1
-            port: 31080
+        nginx_managed: false
+        ingress:
+          enabled: true
+          className: traefik
         helm:
           namespace: prod
 ```
 
-For Kubernetes ingress instead of host Nginx, set `nginx_managed: false`,
-enable `ingress.enabled`, and make sure an ingress controller is installed.
+K3s includes Traefik by default when it is not listed under `k3s.disable`.
+Traefik handles ingress routing and Kubernetes Services load balance across
+healthy pods.
 Application secrets should be provided through GitHub Secrets or inventory
 secret references and rendered into Kubernetes Secrets by Helm; do not commit
 secret values.

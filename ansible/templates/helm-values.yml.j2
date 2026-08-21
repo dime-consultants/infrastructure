@@ -21,6 +21,34 @@ args:
 imagePullSecrets:
 {{ deployment_app_env.imagePullSecrets | default([]) | to_nice_yaml(indent=2) | indent(2, true) }}
 
+podSecurityContext:
+{{ deployment_app_env.podSecurityContext | default({
+  'runAsNonRoot': true,
+  'runAsUser': 1000,
+  'runAsGroup': 1000,
+  'fsGroup': 1000,
+  'seccompProfile': {'type': 'RuntimeDefault'}
+}) | to_nice_yaml(indent=2) | indent(2, true) }}
+
+securityContext:
+{{ deployment_app_env.securityContext | default({
+  'allowPrivilegeEscalation': false,
+  'capabilities': {'drop': ['ALL']},
+  'privileged': false,
+  'readOnlyRootFilesystem': true,
+  'runAsNonRoot': true
+}) | to_nice_yaml(indent=2) | indent(2, true) }}
+
+tmpVolume:
+{{ deployment_app_env.tmpVolume | default({
+  'enabled': true,
+  'mounts': [
+    {'name': 'tmp', 'mountPath': '/tmp'},
+    {'name': 'var-tmp', 'mountPath': '/var/tmp'},
+    {'name': 'cache', 'mountPath': '/home/app/.cache'}
+  ]
+}) | to_nice_yaml(indent=2) | indent(2, true) }}
+
 service:
   enabled: {{ service_config.enabled | default(true) | bool | ternary('true', 'false') }}
   type: {{ service_config.type | default('ClusterIP') | to_json }}
@@ -31,7 +59,7 @@ service:
 {% endif %}
 
 ingress:
-  enabled: {{ ingress_config.enabled | default(false) | bool | ternary('true', 'false') }}
+  enabled: {{ ingress_config.enabled | default(deployment_app_env.domain is defined and ((deployment_app_env.nginx_managed | default(false)) == false)) | bool | ternary('true', 'false') }}
   className: {{ ingress_config.className | default('traefik') | to_json }}
   host: {{ deployment_app_env.domain | default('') | to_json }}
   tls:

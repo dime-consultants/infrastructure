@@ -64,13 +64,16 @@ apps:
         domain: billing-api.dimeconsultants.africa
 ```
 
-K3s is opt-in. By default, Traefik is disabled so host Nginx can keep managing
-ports 80 and 443. If Kubernetes ingress should own 80/443, set:
+K3s is opt-in. When `k3s.enabled: true`, K3s/Traefik owns ports 80 and 443 by
+default and host Nginx is stopped/disabled by base setup. If a K3s server must
+keep using host Nginx, explicitly enable Nginx and disable Traefik:
 
 ```yaml
+nginx_enabled: true
 k3s:
   enabled: true
-  disable: []
+  disable:
+    - traefik
 ```
 
 ## Compose App
@@ -122,17 +125,59 @@ apps:
         replicas: 3
         container_port: 8000
         service:
-          type: NodePort
+          type: ClusterIP
           port: 80
           targetPort: 8000
-          nodePort: 31080
-        nginx_managed: true
-        port: 31080
-        backends:
-          - host: 127.0.0.1
-            port: 31080
+        nginx_managed: false
+        ingress:
+          enabled: true
+          className: traefik
         helm:
           namespace: prod
+```
+
+If an image genuinely requires a different user or writable root filesystem,
+override the chart security context for that app. Keep the override as narrow
+as possible:
+
+```yaml
+environments:
+  prod:
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 1001
+      runAsGroup: 1001
+      fsGroup: 1001
+      seccompProfile:
+        type: RuntimeDefault
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+      privileged: false
+      readOnlyRootFilesystem: true
+      runAsNonRoot: true
+```
+
+The default chart keeps the image root filesystem read-only and mounts writable
+`emptyDir` volumes at `/tmp`, `/var/tmp`, and `/home/app/.cache`. If a specific
+app needs another writable path, add it with `tmpVolume.mounts` or a dedicated
+`volumes`/`volumeMounts` entry instead of making the whole image filesystem
+writable.
+
+```yaml
+environments:
+  prod:
+    tmpVolume:
+      enabled: true
+      mounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: var-tmp
+          mountPath: /var/tmp
+        - name: media-cache
+          mountPath: /app/.cache
 ```
 
 For a worker with no public HTTP service:
@@ -305,9 +350,44 @@ Supported methods:
 - `least_conn`
 - `ip_hash`
 
-For Helm apps with host Nginx, expose a stable `NodePort` and point the backend
-to that node port. For Kubernetes-native ingress, set `nginx_managed: false`
-and enable `ingress.enabled`.
+For Helm apps on K3s, prefer Kubernetes-native ingress: set
+`nginx_managed: false` and enable `ingress.enabled`. K3s/Traefik handles 80/443
+routing and Kubernetes Services load balance across healthy pods.
+
+For legacy host Nginx routing, set `nginx_enabled: true` on the server, disable
+Traefik, expose a stable `NodePort`, and point Nginx backends to that node port.
+
+## Safe K3s Migration
+
+Base setup refuses to disable host Nginx when inventory still contains routes
+that depend on it. Before switching a server fully to K3s-managed ports, migrate
+each public app to:
+
+```yaml
+deployment_type: helm
+environments:
+  prod:
+    domain: app.example.com
+    nginx_managed: false
+    ingress:
+      enabled: true
+      className: traefik
+```
+
+Also remove or migrate `extra_domains` and shared-service public domains that
+were previously exposed through host Nginx. If you need a phased migration, keep
+Nginx on temporarily:
+
+```yaml
+nginx_enabled: true
+k3s:
+  enabled: true
+  disable:
+    - traefik
+```
+
+Once all public routes are Helm ingress routes, remove `nginx_enabled: true` and
+let K3s/Traefik own 80/443.
 
 ## What This Can Accommodate
 
