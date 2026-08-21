@@ -26,6 +26,20 @@
     creates: /usr/local/bin/k3s
   when: not k3s_binary.stat.exists
 
+- name: Read existing K3s systemd unit
+  slurp:
+    src: /etc/systemd/system/k3s.service
+  register: k3s_service_unit
+  when: k3s_binary.stat.exists
+
+- name: Reconfigure existing K3s service when Traefik should be enabled
+  shell: "curl -sfL {{ k3s.install_script_url | default('https://get.k3s.io') }} | INSTALL_K3S_CHANNEL={{ k3s.channel | default('stable') }} INSTALL_K3S_EXEC='{{ k3s_install_exec }}' sh -"
+  when:
+    - k3s_binary.stat.exists
+    - "'traefik' not in (k3s.disable | default([]))"
+    - "'--disable traefik' in (k3s_service_unit.content | b64decode)"
+  notify: Restart K3s
+
 - name: Ensure K3s service is started and enabled
   service:
     name: k3s

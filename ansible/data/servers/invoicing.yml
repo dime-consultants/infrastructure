@@ -21,6 +21,12 @@ nginx_enabled: false
 
 k3s:
   enabled: true
+  disable: []
+  install_helm: true
+  firewall_ports:
+    - 80
+    - 443
+    - 6443
 
 firewall_extra_ports: []
 
@@ -98,6 +104,7 @@ apps:
 
   - name: hrpayroll
     repo: dime-consultants/hrpayroll
+    deployment_type: helm
     aliases:
       - hrpayroll
       - hr.dimeconsultants.africa
@@ -113,10 +120,32 @@ apps:
     environments:
       prod:
         domain: hr.dimeconsultants.africa
+        nginx_managed: false
         port: 8023
+        container_port: 8023
+        service:
+          type: ClusterIP
+          port: 80
+          targetPort: 8023
+        ingress:
+          enabled: true
+          className: traefik
+        helm:
+          namespace: prod
       stage:
         domain: stage-hr.dimeconsultants.africa
+        nginx_managed: false
         port: 7734
+        container_port: 7734
+        service:
+          type: ClusterIP
+          port: 80
+          targetPort: 7734
+        ingress:
+          enabled: true
+          className: traefik
+        helm:
+          namespace: stage
 
   - name: guardian
     repo: dime-consultants/Guardian-Bank-UI
