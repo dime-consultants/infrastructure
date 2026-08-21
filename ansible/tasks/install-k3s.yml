@@ -54,7 +54,7 @@
   when: k3s_reconfigured is defined and k3s_reconfigured.changed
 
 - name: Wait for K3s API
-  command: kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }} get nodes
+  command: /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }} get nodes
   register: k3s_nodes
   changed_when: false
   retries: 20
@@ -63,14 +63,14 @@
 
 - name: Wait for Traefik deployment when K3s owns ingress
   command: >
-    kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
     -n kube-system rollout status deployment/traefik --timeout=180s
   changed_when: false
   when: "'traefik' not in (k3s.disable | default([]))"
 
 - name: Check Traefik service when K3s owns ingress
   command: >
-    kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
     -n kube-system get service traefik
   changed_when: false
   when: "'traefik' not in (k3s.disable | default([]))"

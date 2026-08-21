@@ -33,7 +33,7 @@
 
 - name: Create Kubernetes namespace
   command: >
-    kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
     create namespace {{ helm_namespace }}
   register: namespace_create
   failed_when: namespace_create.rc != 0 and 'AlreadyExists' not in namespace_create.stderr

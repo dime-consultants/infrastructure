@@ -225,7 +225,7 @@
 
     - name: Restart Traefik service load balancer pods after releasing HTTP ports
       command: >
-        kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+        /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
         -n kube-system delete pod
         -l svccontroller.k3s.cattle.io/svcname=traefik
         --ignore-not-found=true
