@@ -35,3 +35,21 @@ backup_defaults:
     - /etc/letsencrypt
   postgres:
     enabled: true
+
+load_balancing_defaults:
+  method: round_robin
+  max_fails: 3
+  fail_timeout: 30s
+
+k3s:
+  enabled: false
+  channel: stable
+  install_script_url: https://get.k3s.io
+  kubeconfig_path: /etc/rancher/k3s/k3s.yaml
+  write_kubeconfig_mode: "0644"
+  disable:
+    - traefik
+  install_helm: true
+  helm_install_script_url: https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+  firewall_ports:
+    - 6443

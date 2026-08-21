@@ -23,17 +23,23 @@
 
 - name: Gather all app domains
   set_fact:
-    app_domains: >-
-      {{
-        apps
-        | map(attribute='environments')
-        | map('dict2items')
-        | flatten
-        | map(attribute='value.domain')
-        | select('defined')
-        | select('truthy')
-        | list
-      }}
+    app_domains_json: >-
+      {%- set domains = [] -%}
+      {%- for app in apps | default([]) -%}
+      {%- if app.environments is mapping -%}
+      {%- for env_name, env_options in app.environments.items() -%}
+      {%- set merged_env = app | combine(env_options | default({}), recursive=True) -%}
+      {%- if env_options.domain is defined and merged_env.nginx_managed | default(true) and (merged_env.port is defined or merged_env.backends is defined or (merged_env.load_balancing is defined and merged_env.load_balancing.backends is defined)) -%}
+      {%- set _ = domains.append(env_options.domain) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ domains | to_json }}
+
+- name: Parse app domains
+  set_fact:
+    app_domains: "{{ app_domains_json | from_json }}"
 
 - name: Gather shared service domains
   set_fact:
@@ -105,11 +111,14 @@
   vars:
     ssl_enabled: false
     environments_to_use: >-
-      {{
-        app.environments
-        | dict2items
-        | list
-      }}
+      {%- set envs = [] -%}
+      {%- for env_item in app.environments | dict2items -%}
+      {%- set merged_env = app | combine(env_item.value | default({}), recursive=True) -%}
+      {%- if merged_env.nginx_managed | default(true) and (merged_env.port is defined or merged_env.backends is defined or (merged_env.load_balancing is defined and merged_env.load_balancing.backends is defined)) -%}
+      {%- set _ = envs.append(env_item) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ envs }}
 
 - name: Generate HTTP configs for extra tools
   template:
@@ -176,13 +185,14 @@
   vars:
     ssl_enabled: true
     environments_to_use: >-
-      {{
-        app.environments
-        | dict2items
-        | selectattr('value.domain', 'defined')
-        | selectattr('value.domain', 'in', ssl_ready_domains)
-        | list
-      }}
+      {%- set envs = [] -%}
+      {%- for env_item in app.environments | dict2items -%}
+      {%- set merged_env = app | combine(env_item.value | default({}), recursive=True) -%}
+      {%- if env_item.value.domain is defined and env_item.value.domain in ssl_ready_domains and merged_env.nginx_managed | default(true) and (merged_env.port is defined or merged_env.backends is defined or (merged_env.load_balancing is defined and merged_env.load_balancing.backends is defined)) -%}
+      {%- set _ = envs.append(env_item) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ envs }}
   when: environments_to_use | length > 0
 
 - name: Debug – no HTTPS-ready environments

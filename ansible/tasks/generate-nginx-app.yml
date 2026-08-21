@@ -7,6 +7,8 @@
   vars:
     domain: "{{ env.value.domain | mandatory }}"
     backend_port: "{{ env.value.port | mandatory }}"
+    load_balancing: "{{ load_balancing_defaults | default({}) | combine(app.load_balancing | default({}), recursive=True) | combine(env.value.load_balancing | default({}), recursive=True) }}"
+    backend_servers: "{{ load_balancing.backends | default(env.value.backends | default(app.backends | default([{'host': '127.0.0.1', 'port': backend_port}]))) }}"
     ssl_enabled: "{{ ssl_enabled | default(false) | bool }}"
   loop: "{{ environments_to_use }}"
   loop_control:

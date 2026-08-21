@@ -48,6 +48,7 @@
     - name: Resolve application directory
       set_fact:
         app_dir: "/opt/{{ deployment_app.name }}/{{ env }}"
+        deployment_runtime: "{{ deployment_app_env.deployment_type | default(deployment_app_env.runtime | default('compose')) }}"
 
     - name: Calculate max disk usage before deployment
       shell: |
@@ -56,12 +57,14 @@
           awk 'NR > 1 { gsub("%", "", $5); if ($5 > max) max=$5 } END { print max + 0 }'
       register: max_disk_usage_before_deploy
       changed_when: false
+      when: deployment_runtime == 'compose'
 
     - name: Pre-deploy Docker maintenance and disk check
       include_tasks: ../tasks/configure-docker-maintenance.yml
       vars:
         docker_maintenance_configure_daemon: false
       when: >-
+        deployment_runtime == 'compose' and
         deployment_app_env.deploy_maintenance | default(true) | bool and
         (
           deployment_app_env.force_deploy_maintenance | default(false) | bool or
@@ -93,7 +96,9 @@
         src: "{{ compose_file }}"
         dest: "{{ app_dir }}/docker-compose.yml"
         mode: '0644'
-      when: compose_file is defined
+      when:
+        - deployment_runtime == 'compose'
+        - compose_file is defined
 
     - name: Copy .env file
       copy:
@@ -102,7 +107,9 @@
         mode: '0644'
         owner: "{{ ansible_user }}"
         group: "{{ ansible_user }}"
-      when: env_file is defined
+      when:
+        - deployment_runtime == 'compose'
+        - env_file is defined
 
     - name: Remove stale deploy artifacts
       file:
@@ -110,12 +117,21 @@
         state: absent
       loop: "{{ deployment_app_env.remove_deploy_artifacts | default([]) }}"
 
+    - name: Validate Compose deployment artifact
+      assert:
+        that:
+          - compose_file is defined
+        fail_msg: "Compose deployments require compose_file. Set deployment_type: helm for K3s/Helm apps."
+      when: deployment_runtime == 'compose'
+
     - name: Force image tag override (for rollback)
       lineinfile:
         path: "{{ app_dir }}/.env"
         regexp: '^IMAGE_TAG='
         line: "IMAGE_TAG={{ force_image_tag | default(omit) }}"
-      when: force_image_tag is defined
+      when:
+        - deployment_runtime == 'compose'
+        - force_image_tag is defined
 
     - name: Stop and remove existing stack
       community.docker.docker_compose_v2:
@@ -124,7 +140,9 @@
           state: absent
           remove_volumes: false
           remove_orphans: true
-      when: deployment_app_env.stop_before_deploy | default(false) | bool
+      when:
+        - deployment_runtime == 'compose'
+        - deployment_app_env.stop_before_deploy | default(false) | bool
 
     - name: Deploy with Docker Compose
       community.docker.docker_compose_v2:
@@ -144,9 +162,16 @@
         wait_timeout: "{{ deployment_app_env.compose_wait_timeout | default(300) }}"
       register: compose_output
       changed_when: true
+      when: deployment_runtime == 'compose'
+
+    - name: Deploy with Helm on K3s
+      include_tasks: ../tasks/deploy-helm-app.yml
+      when: deployment_runtime in ['helm', 'k3s']
 
     - name: Post-deploy Docker maintenance and disk check
       include_tasks: ../tasks/configure-docker-maintenance.yml
       vars:
         docker_maintenance_configure_daemon: false
-      when: deployment_app_env.post_deploy_maintenance | default(false) | bool
+      when:
+        - deployment_runtime == 'compose'
+        - deployment_app_env.post_deploy_maintenance | default(false) | bool
