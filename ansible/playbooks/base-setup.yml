@@ -25,6 +25,10 @@
       set_fact:
         effective_nginx_enabled: "{{ nginx_enabled | default(not (k3s.enabled | default(false) | bool)) | bool }}"
 
+    - name: Show resolved host routing mode
+      debug:
+        msg: "Host routing mode: {{ 'nginx' if effective_nginx_enabled | bool else 'k3s-traefik' }}"
+
     - name: Resolve routes that still require host Nginx
       set_fact:
         host_nginx_route_blockers_json: >-
@@ -71,7 +75,7 @@
           or set nginx_enabled: true until migration is complete.
       when:
         - k3s.enabled | default(false) | bool
-        - not effective_nginx_enabled
+        - not (effective_nginx_enabled | bool)
         - not (k3s.external_routes_enabled | default(true) | bool)
 
     - name: Remove previously managed Docker apt repository
@@ -198,7 +202,7 @@
       apt:
         name: "{{ nginx_packages }}"
         state: present
-      when: effective_nginx_enabled
+      when: effective_nginx_enabled | bool
 
     - name: Install and configure K3s
       include_tasks: ../tasks/install-k3s.yml
@@ -211,7 +215,7 @@
         shared_services: "{{ hostvars[inventory_hostname].shared_services | default([]) }}"
       when:
         - k3s.enabled | default(false) | bool
-        - not effective_nginx_enabled
+        - not (effective_nginx_enabled | bool)
         - k3s.external_routes_enabled | default(true) | bool
 
     - name: Stop and disable host Nginx when Kubernetes owns HTTP ports
@@ -220,7 +224,7 @@
         state: stopped
         enabled: false
       when:
-        - not effective_nginx_enabled
+        - not (effective_nginx_enabled | bool)
         - "'nginx.service' in ansible_facts.services"
 
     - name: Configure security baseline
@@ -268,13 +272,13 @@
         path: /var/www/letsencrypt
         state: directory
         mode: '0755'
-      when: effective_nginx_enabled
+      when: effective_nginx_enabled | bool
 
     - name: Resolve Nginx basic auth credentials
       set_fact:
         basic_auth_username: "{{ lookup('env', 'BASIC_AUTH_USERNAME') }}"
         basic_auth_password: "{{ lookup('env', 'BASIC_AUTH_PASSWORD') }}"
-      when: effective_nginx_enabled
+      when: effective_nginx_enabled | bool
 
     - name: Resolve domains requiring Nginx basic auth
       set_fact:
@@ -295,12 +299,12 @@
           {%- endif -%}
           {%- endfor -%}
           {{ auth.domains | to_json }}
-      when: effective_nginx_enabled
+      when: effective_nginx_enabled | bool
 
     - name: Parse domains requiring Nginx basic auth
       set_fact:
         basic_auth_domains: "{{ basic_auth_domains_json | from_json }}"
-      when: effective_nginx_enabled
+      when: effective_nginx_enabled | bool
 
     - name: Validate Nginx basic auth credentials
       assert:
@@ -311,7 +315,7 @@
           BASIC_AUTH_USERNAME and BASIC_AUTH_PASSWORD GitHub Secrets are required
           because these domains use basic_auth: {{ basic_auth_domains | join(', ') }}.
       when:
-        - effective_nginx_enabled
+        - effective_nginx_enabled | bool
         - basic_auth_domains | length > 0
 
     - name: Install htpasswd utility
@@ -319,7 +323,7 @@
         name: apache2-utils
         state: present
       when:
-        - effective_nginx_enabled
+        - effective_nginx_enabled | bool
         - basic_auth_domains | default([]) | length > 0
 
     - name: Create or update .htpasswd file with basic auth credentials
@@ -332,7 +336,7 @@
         mode: '0640'
         state: present
       when:
-        - effective_nginx_enabled
+        - effective_nginx_enabled | bool
         - basic_auth_domains | length > 0
 
     - name: Generate Nginx sites for all apps and environments
@@ -341,7 +345,7 @@
         apps: "{{ hostvars[inventory_hostname].apps | default([]) }}"
         extra_domains: "{{ hostvars[inventory_hostname].extra_domains | default([]) }}"
         shared_services: "{{ hostvars[inventory_hostname].shared_services | default([]) }}"
-      when: effective_nginx_enabled
+      when: effective_nginx_enabled | bool
 
   handlers:
     - name: Reload Nginx
