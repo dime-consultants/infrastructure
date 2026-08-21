@@ -408,6 +408,41 @@ K3s external routes automatically when Nginx is disabled. The backend host
 defaults to the Ansible host IP; set `k3s.external_backend_host` if Traefik
 should use a private node IP instead.
 
+### Runtime Cleanup
+
+K3s mode can remove host Nginx and stop Docker containers after Traefik is
+confirmed listening on 80/443:
+
+```yaml
+nginx_enabled: false
+k3s:
+  enabled: true
+
+migration_cleanup:
+  purge_nginx_when_k3s: true
+  stop_docker_when_k3s: true
+  disable_docker_when_k3s: false
+```
+
+Switching back to Docker/Nginx is also explicit. Volume and image deletion are
+destructive and must be opted into separately:
+
+```yaml
+nginx_enabled: true
+k3s:
+  enabled: false
+
+migration_cleanup:
+  uninstall_k3s_when_docker: true
+  docker_prune_when_docker: true
+  docker_prune_images_when_docker: true
+  docker_prune_volumes_when_docker: true
+```
+
+`docker_prune_volumes_when_docker: true` deletes Docker volumes, including
+database volumes if those services are still Docker-managed. Only enable it
+after confirming the data is no longer needed or has been backed up.
+
 ## What This Can Accommodate
 
 This setup can deploy many repositories to many servers as long as each app

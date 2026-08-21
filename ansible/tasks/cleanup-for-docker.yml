@@ -1,0 +1,41 @@
+---
+- name: Check for K3s uninstall script
+  stat:
+    path: /usr/local/bin/k3s-uninstall.sh
+  register: k3s_uninstall_script
+
+- name: Uninstall K3s when switching back to Docker
+  command: /usr/local/bin/k3s-uninstall.sh
+  when:
+    - migration_cleanup.uninstall_k3s_when_docker | default(false) | bool
+    - k3s_uninstall_script.stat.exists
+
+- name: Ensure Docker service is available before prune
+  service:
+    name: docker
+    state: started
+    enabled: true
+  when:
+    - >
+      migration_cleanup.docker_prune_when_docker | default(false) | bool or
+      migration_cleanup.docker_prune_images_when_docker | default(false) | bool or
+      migration_cleanup.docker_prune_volumes_when_docker | default(false) | bool
+    - "'docker.service' in ansible_facts.services"
+
+- name: Prune Docker containers, networks, and build cache
+  command: docker system prune --force
+  register: docker_system_prune
+  changed_when: "'Total reclaimed space' in docker_system_prune.stdout"
+  when: migration_cleanup.docker_prune_when_docker | default(false) | bool
+
+- name: Prune all Docker images
+  command: docker image prune --all --force
+  register: docker_image_prune
+  changed_when: "'Total reclaimed space' in docker_image_prune.stdout"
+  when: migration_cleanup.docker_prune_images_when_docker | default(false) | bool
+
+- name: Delete all Docker volumes
+  command: docker volume prune --force
+  register: docker_volume_prune
+  changed_when: "'Total reclaimed space' in docker_volume_prune.stdout"
+  when: migration_cleanup.docker_prune_volumes_when_docker | default(false) | bool

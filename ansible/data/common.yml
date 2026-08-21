@@ -56,3 +56,12 @@ k3s:
     - 80
     - 443
     - 6443
+
+migration_cleanup:
+  purge_nginx_when_k3s: false
+  stop_docker_when_k3s: false
+  disable_docker_when_k3s: false
+  uninstall_k3s_when_docker: false
+  docker_prune_when_docker: false
+  docker_prune_volumes_when_docker: false
+  docker_prune_images_when_docker: false

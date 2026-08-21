@@ -19,6 +19,15 @@ docker_setup_enabled: false
 shared_services_deploy_enabled: false
 nginx_enabled: false
 
+migration_cleanup:
+  purge_nginx_when_k3s: true
+  stop_docker_when_k3s: true
+  disable_docker_when_k3s: false
+  uninstall_k3s_when_docker: false
+  docker_prune_when_docker: false
+  docker_prune_volumes_when_docker: false
+  docker_prune_images_when_docker: false
+
 k3s:
   enabled: true
   disable: []

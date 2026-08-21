@@ -37,14 +37,21 @@
   when:
     - k3s_binary.stat.exists
     - "'traefik' not in (k3s.disable | default([]))"
-    - "'--disable traefik' in (k3s_service_unit.content | b64decode)"
-  notify: Restart K3s
+    - "'--disable' in (k3s_service_unit.content | b64decode)"
+    - "'traefik' in (k3s_service_unit.content | b64decode)"
+  register: k3s_reconfigured
 
 - name: Ensure K3s service is started and enabled
   service:
     name: k3s
     state: started
     enabled: yes
+
+- name: Restart K3s after service reconfiguration
+  service:
+    name: k3s
+    state: restarted
+  when: k3s_reconfigured is defined and k3s_reconfigured.changed
 
 - name: Wait for K3s API
   command: kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }} get nodes
@@ -53,6 +60,20 @@
   retries: 20
   delay: 6
   until: k3s_nodes.rc == 0
+
+- name: Wait for Traefik deployment when K3s owns ingress
+  command: >
+    kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    -n kube-system rollout status deployment/traefik --timeout=180s
+  changed_when: false
+  when: "'traefik' not in (k3s.disable | default([]))"
+
+- name: Check Traefik service when K3s owns ingress
+  command: >
+    kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    -n kube-system get service traefik
+  changed_when: false
+  when: "'traefik' not in (k3s.disable | default([]))"
 
 - name: Check whether Helm is installed
   stat:

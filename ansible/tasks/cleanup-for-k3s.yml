@@ -1,0 +1,53 @@
+---
+- name: Stop all Docker containers before K3s takes over
+  shell: |
+    set -eu
+    if ! command -v docker >/dev/null 2>&1; then
+      exit 0
+    fi
+    if ! docker info >/dev/null 2>&1; then
+      exit 0
+    fi
+    containers="$(docker ps -aq)"
+    if [ -n "$containers" ]; then
+      echo "$containers"
+      docker stop $containers
+    fi
+  register: docker_stop_all
+  changed_when: docker_stop_all.stdout | length > 0
+  failed_when: docker_stop_all.rc != 0
+  when: migration_cleanup.stop_docker_when_k3s | default(false) | bool
+
+- name: Disable Docker service after stopping containers
+  service:
+    name: docker
+    state: stopped
+    enabled: false
+  when:
+    - migration_cleanup.disable_docker_when_k3s | default(false) | bool
+    - "'docker.service' in ansible_facts.services"
+
+- name: Stop Nginx before purging it
+  service:
+    name: nginx
+    state: stopped
+    enabled: false
+  when: "'nginx.service' in ansible_facts.services"
+
+- name: Purge Nginx packages when K3s owns HTTP ports
+  apt:
+    name: "{{ nginx_packages + ['apache2-utils'] }}"
+    state: absent
+    purge: true
+    autoremove: true
+  when: migration_cleanup.purge_nginx_when_k3s | default(false) | bool
+
+- name: Remove generated Nginx configuration
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/nginx/sites-enabled
+    - /etc/nginx/sites-available
+    - /etc/nginx/.htpasswd
+  when: migration_cleanup.purge_nginx_when_k3s | default(false) | bool
