@@ -4,6 +4,7 @@
     external_route_release: "{{ ('external-' ~ route.domain) | regex_replace('[^A-Za-z0-9-]', '-') | lower | truncate(53, true, '') }}"
     external_route_namespace: "{{ route.namespace | default('external-routes') }}"
     external_route_values_file: "/tmp/external-route-{{ route.domain | regex_replace('[^A-Za-z0-9-]', '-') }}.yml"
+    external_route_chart_remote_path: "/tmp/external-route-chart"
 
 - name: Create external route namespace
   shell: |
@@ -23,9 +24,15 @@
     dest: "{{ external_route_values_file }}"
     mode: "0600"
 
+- name: Copy external route Helm chart to target host
+  copy:
+    src: "{{ playbook_dir }}/../helm/external-route/"
+    dest: "{{ external_route_chart_remote_path }}/"
+    mode: preserve
+
 - name: Deploy external route
   command: >
-    /usr/local/bin/helm upgrade --install {{ external_route_release }} {{ playbook_dir }}/../helm/external-route
+    /usr/local/bin/helm upgrade --install {{ external_route_release }} {{ external_route_chart_remote_path }}
     --namespace {{ external_route_namespace }}
     --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
     --values {{ external_route_values_file }}
