@@ -1,0 +1,7 @@
+domain: ""
+ingressClassName: traefik
+backend:
+  host: ""
+  port: 80
+service:
+  port: 80

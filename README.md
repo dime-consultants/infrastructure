@@ -389,6 +389,25 @@ k3s:
 Once all public routes are Helm ingress routes, remove `nginx_enabled: true` and
 let K3s/Traefik own 80/443.
 
+For existing host-port services that are not yet Kubernetes workloads, base
+setup can create Traefik ingress routes that point to those backend ports:
+
+```yaml
+k3s:
+  enabled: true
+  external_routes_enabled: true
+  external_backend_host: 203.0.113.10
+
+extra_domains:
+  - domain: argocd.example.com
+    proxy_port: 8080
+```
+
+Shared-service domains and `extra_domains` with `proxy_port` are converted into
+K3s external routes automatically when Nginx is disabled. The backend host
+defaults to the Ansible host IP; set `k3s.external_backend_host` if Traefik
+should use a private node IP instead.
+
 ## What This Can Accommodate
 
 This setup can deploy many repositories to many servers as long as each app

@@ -183,6 +183,11 @@ Application secrets should be provided through GitHub Secrets or inventory
 secret references and rendered into Kubernetes Secrets by Helm; do not commit
 secret values.
 
+When host Nginx is disabled, shared-service domains and `extra_domains` with
+`proxy_port` can be routed by Traefik as external backend routes. The backend
+host defaults to `ansible_host`; set `k3s.external_backend_host` when Traefik
+should use a private node IP.
+
 ## Backups
 
 Backups are opt-in per server:

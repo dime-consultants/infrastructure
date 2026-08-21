@@ -1,0 +1,31 @@
+---
+- name: Resolve external route facts
+  set_fact:
+    external_route_release: "{{ ('external-' ~ route.domain) | regex_replace('[^A-Za-z0-9-]', '-') | lower | truncate(53, true, '') }}"
+    external_route_namespace: "{{ route.namespace | default('external-routes') }}"
+    external_route_values_file: "/tmp/external-route-{{ route.domain | regex_replace('[^A-Za-z0-9-]', '-') }}.yml"
+
+- name: Create external route namespace
+  command: >
+    kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    create namespace {{ external_route_namespace }}
+  register: external_route_namespace_create
+  failed_when: external_route_namespace_create.rc != 0 and 'AlreadyExists' not in external_route_namespace_create.stderr
+  changed_when: external_route_namespace_create.rc == 0
+
+- name: Render external route values
+  template:
+    src: ../templates/external-route-values.yml.j2
+    dest: "{{ external_route_values_file }}"
+    mode: "0600"
+
+- name: Deploy external route
+  command: >
+    helm upgrade --install {{ external_route_release }} {{ playbook_dir }}/../helm/external-route
+    --namespace {{ external_route_namespace }}
+    --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    --values {{ external_route_values_file }}
+    --wait
+    --timeout 3m
+  register: external_route_deploy
+  changed_when: "'Release' in external_route_deploy.stdout or 'deployed' in external_route_deploy.stdout or 'upgraded' in external_route_deploy.stdout"

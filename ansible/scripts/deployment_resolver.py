@@ -147,10 +147,17 @@ def merged_app_env(app, env_options):
 
 def deployment_env_values(server, app, env_options, env_name, shared_service_catalog):
     app_env = merged_app_env(app, env_options)
+    deployment_runtime = app_env.get("deployment_type") or app_env.get("runtime") or "compose"
     rabbitmq_namespace = app_env.get("rabbitmq_namespace")
     postgres_database = app_env.get("postgres_database")
     app_port = app_env.get("port")
     port_env = app_env.get("port_env")
+    k3s_config = server.get("k3s") or {}
+    k3s_backend_host = (
+        app_env.get("backend_host")
+        or k3s_config.get("external_backend_host")
+        or os.environ.get("TARGET_PUBLIC_IP")
+    )
 
     env_values = {}
 
@@ -189,8 +196,23 @@ def deployment_env_values(server, app, env_options, env_name, shared_service_cat
                 "DATABASE_PASSWORD": secret_value(
                     postgres_secret_names, "password", f"postgres:{env_name}"
                 ),
-                "DATABASE_HOST": postgres_config.get("service_host", "postgres"),
-                "DATABASE_PORT": "5432",
+                "DATABASE_HOST": (
+                    app_env.get("database_host")
+                    or app_env.get("postgres_host")
+                    or (
+                        k3s_backend_host
+                        if deployment_runtime in {"helm", "k3s"} and k3s_backend_host
+                        else postgres_config.get("service_host", "postgres")
+                    )
+                ),
+                "DATABASE_PORT": str(
+                    app_env.get("database_port")
+                    or (
+                        postgres_config.get("published_port", 5432)
+                        if deployment_runtime in {"helm", "k3s"}
+                        else 5432
+                    )
+                ),
                 "SHARED_NETWORK": postgres_config.get("network", f"shared-{env_name}"),
             }
         )
@@ -209,7 +231,22 @@ def deployment_env_values(server, app, env_options, env_name, shared_service_cat
         rabbitmq_password = secret_value(
             rabbitmq_secret_names, "password", f"rabbitmq:{env_name}"
         )
-        rabbitmq_host = rabbitmq_config.get("service_host", "rabbitmq")
+        rabbitmq_host = (
+            app_env.get("rabbitmq_host")
+            or (
+                k3s_backend_host
+                if deployment_runtime in {"helm", "k3s"} and k3s_backend_host
+                else rabbitmq_config.get("service_host", "rabbitmq")
+            )
+        )
+        rabbitmq_port = (
+            app_env.get("rabbitmq_port")
+            or (
+                rabbitmq_config.get("amqp_port", 5672)
+                if deployment_runtime in {"helm", "k3s"}
+                else 5672
+            )
+        )
         env_values.update(
             {
                 "RABBITMQ_NAMESPACE": rabbitmq_namespace,
@@ -217,7 +254,7 @@ def deployment_env_values(server, app, env_options, env_name, shared_service_cat
                 "RABBITMQ_DEFAULT_PASS": rabbitmq_password,
                 "CELERY_BROKER_URL": (
                     f"amqp://{quote(rabbitmq_user, safe='')}:"
-                    f"{quote(rabbitmq_password, safe='')}@{rabbitmq_host}:5672/"
+                    f"{quote(rabbitmq_password, safe='')}@{rabbitmq_host}:{rabbitmq_port}/"
                     f"{quote(rabbitmq_namespace, safe='')}"
                 ),
                 "SHARED_NETWORK": rabbitmq_config.get(

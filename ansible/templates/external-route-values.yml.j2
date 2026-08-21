@@ -1,0 +1,7 @@
+domain: {{ route.domain | to_json }}
+ingressClassName: {{ route.ingress_class_name | default('traefik') | to_json }}
+backend:
+  host: {{ route.backend_host | to_json }}
+  port: {{ route.backend_port }}
+service:
+  port: {{ route.service_port | default(80) }}

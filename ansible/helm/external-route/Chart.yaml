@@ -1,0 +1,6 @@
+apiVersion: v2
+name: external-route
+description: Route a Kubernetes Ingress to an existing external or host-port backend
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
