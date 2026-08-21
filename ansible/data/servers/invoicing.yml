@@ -17,6 +17,10 @@ ansible_ssh_common_args: >-
 
 docker_setup_enabled: false
 shared_services_deploy_enabled: false
+nginx_enabled: false
+
+k3s:
+  enabled: true
 
 firewall_extra_ports: []
 
@@ -49,6 +53,7 @@ shared_services:
 apps:
   - name: invoicing
     repo: dime-consultants/ai_invoicing
+    deployment_type: helm
     aliases:
       - ai_invoicing
       - invoicing.dimeconsultants.africa
@@ -64,10 +69,32 @@ apps:
     environments:
       prod:
         domain: invoicing.dimeconsultants.africa
+        nginx_managed: false
         port: 9455
+        container_port: 9455
+        service:
+          type: ClusterIP
+          port: 80
+          targetPort: 9455
+        ingress:
+          enabled: true
+          className: traefik
+        helm:
+          namespace: prod
       stage:
         domain: stage-invoicing.dimeconsultants.africa
+        nginx_managed: false
         port: 6001
+        container_port: 6001
+        service:
+          type: ClusterIP
+          port: 80
+          targetPort: 6001
+        ingress:
+          enabled: true
+          className: traefik
+        helm:
+          namespace: stage
 
   - name: hrpayroll
     repo: dime-consultants/hrpayroll
@@ -93,6 +120,7 @@ apps:
 
   - name: guardian
     repo: dime-consultants/Guardian-Bank-UI
+    deployment_type: helm
     aliases:
       - guardian
       - dime-consultants/guardian
@@ -102,10 +130,32 @@ apps:
     environments:
       prod:
         domain: guardian.dimeconsultants.africa
+        nginx_managed: false
         port: 3004
+        container_port: 3004
+        service:
+          type: ClusterIP
+          port: 80
+          targetPort: 3004
+        ingress:
+          enabled: true
+          className: traefik
+        helm:
+          namespace: prod
       stage:
         domain: stage-guardian.dimeconsultants.africa
+        nginx_managed: false
         port: 3005
+        container_port: 3005
+        service:
+          type: ClusterIP
+          port: 80
+          targetPort: 3005
+        ingress:
+          enabled: true
+          className: traefik
+        helm:
+          namespace: stage
 
 extra_domains:
   - domain: promtail.dimeconsultants.africa

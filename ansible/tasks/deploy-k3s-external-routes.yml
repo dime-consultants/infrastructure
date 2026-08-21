@@ -1,0 +1,57 @@
+---
+- name: Resolve K3s external route backend host
+  set_fact:
+    k3s_external_backend_host: "{{ k3s.external_backend_host | default(ansible_host) }}"
+
+- name: Gather K3s external routes
+  set_fact:
+    k3s_external_routes_json: >-
+      {%- set routes = [] -%}
+      {%- for domain_options in extra_domains | default([]) -%}
+      {%- if domain_options.domain is defined and domain_options.proxy_port is defined -%}
+      {%- set _ = routes.append({
+        'domain': domain_options.domain,
+        'backend_host': domain_options.backend_host | default(k3s_external_backend_host),
+        'backend_port': domain_options.proxy_port,
+        'ingress_class_name': domain_options.ingress_class_name | default('traefik')
+      }) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {%- for service in shared_services | default([]) -%}
+      {%- if service.name in shared_service_catalog and service.environments is mapping -%}
+      {%- for env_name, env_options in service.environments.items() -%}
+      {%- if env_options.domain is defined and env_name in shared_service_catalog[service.name].environments -%}
+      {%- set catalog_env = shared_service_catalog[service.name].environments[env_name] -%}
+      {%- set backend_port = env_options.proxy_port
+          | default(env_options.management_port
+          | default(env_options.http_port
+          | default(env_options.published_port
+          | default(catalog_env.management_port
+          | default(catalog_env.http_port
+          | default(catalog_env.published_port | default(omit))))))) -%}
+      {%- set _ = routes.append({
+        'domain': env_options.domain,
+        'backend_host': env_options.backend_host | default(k3s_external_backend_host),
+        'backend_port': backend_port,
+        'ingress_class_name': env_options.ingress_class_name | default('traefik')
+      }) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {%- for route in k3s_external_routes | default([]) -%}
+      {%- set _ = routes.append(route) -%}
+      {%- endfor -%}
+      {{ routes | to_json }}
+
+- name: Parse K3s external routes
+  set_fact:
+    k3s_external_routes_resolved: "{{ k3s_external_routes_json | from_json }}"
+
+- name: Deploy K3s external routes
+  include_tasks: deploy-k3s-external-route.yml
+  loop: "{{ k3s_external_routes_resolved }}"
+  loop_control:
+    loop_var: route
+    label: "{{ route.domain }}"
+  when: k3s_external_routes_resolved | length > 0

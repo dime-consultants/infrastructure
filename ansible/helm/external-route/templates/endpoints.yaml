@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: {{ include "external-route.fullname" . }}
+  labels:
+    {{- include "external-route.labels" . | nindent 4 }}
+subsets:
+  - addresses:
+      - ip: {{ .Values.backend.host }}
+    ports:
+      - name: http
+        port: {{ .Values.backend.port }}
+        protocol: TCP

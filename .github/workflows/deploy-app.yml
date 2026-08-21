@@ -128,6 +128,7 @@ jobs:
           RABBITMQ_PROD_PASSWORD: ${{ secrets.RABBITMQ_PROD_PASSWORD }}
           RABBITMQ_STAGE_USER: ${{ secrets.RABBITMQ_STAGE_USER }}
           RABBITMQ_STAGE_PASSWORD: ${{ secrets.RABBITMQ_STAGE_PASSWORD }}
+          TARGET_PUBLIC_IP: ${{ secrets[format('{0}', matrix.public_ip_secret_name)] }}
         run: |
           python3 ansible/scripts/deployment_resolver.py env \
             --app "${{ github.event.client_payload.app_repo }}" \

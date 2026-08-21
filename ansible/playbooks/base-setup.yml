@@ -72,6 +72,7 @@
       when:
         - k3s.enabled | default(false) | bool
         - not effective_nginx_enabled
+        - not (k3s.external_routes_enabled | default(true) | bool)
 
     - name: Remove previously managed Docker apt repository
       file:
@@ -202,6 +203,16 @@
     - name: Install and configure K3s
       include_tasks: ../tasks/install-k3s.yml
       when: k3s.enabled | default(false) | bool
+
+    - name: Deploy K3s external routes for host-port services
+      include_tasks: ../tasks/deploy-k3s-external-routes.yml
+      vars:
+        extra_domains: "{{ hostvars[inventory_hostname].extra_domains | default([]) }}"
+        shared_services: "{{ hostvars[inventory_hostname].shared_services | default([]) }}"
+      when:
+        - k3s.enabled | default(false) | bool
+        - not effective_nginx_enabled
+        - k3s.external_routes_enabled | default(true) | bool
 
     - name: Stop and disable host Nginx when Kubernetes owns HTTP ports
       service:
