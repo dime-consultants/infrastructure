@@ -203,6 +203,8 @@ apps:
           type: ClusterIP
           port: 80
           targetPort: 3004
+        probes:
+          path: /
         ingress:
           enabled: true
           className: traefik
@@ -223,6 +225,8 @@ apps:
           type: ClusterIP
           port: 80
           targetPort: 3005
+        probes:
+          path: /
         ingress:
           enabled: true
           className: traefik

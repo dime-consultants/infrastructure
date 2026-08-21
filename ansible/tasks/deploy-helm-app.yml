@@ -31,6 +31,8 @@
     helm_chart_deploy_path: "{{ app_dir }}/chart"
     helm_values_file: "{{ app_dir }}/helm-values.yml"
     helm_image_tag: "{{ force_image_tag | default(image_tag | default(image_options.tag | default('latest'))) }}"
+    helm_timeout: "{{ helm_options.timeout | default('15m') }}"
+    helm_history_max: "{{ helm_options.history_max | default(10) }}"
 
 - name: Check K3s binary before Helm deploy
   stat:
@@ -101,13 +103,124 @@
       - helm_chart_deploy_chart.stat.exists
     fail_msg: "Helm chart was not copied to {{ helm_chart_deploy_path }} on {{ inventory_hostname }}."
 
-- name: Deploy Helm release
+- name: Check existing Helm release status
   command: >
-    /usr/local/bin/helm upgrade --install {{ helm_release_name }} {{ helm_chart_deploy_path }}
+    /usr/local/bin/helm status {{ helm_release_name }}
     --namespace {{ helm_namespace }}
     --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
-    --values {{ helm_values_file }}
+    --output json
+  register: helm_existing_status
+  changed_when: false
+  failed_when: false
+
+- name: Resolve existing Helm release status
+  set_fact:
+    helm_existing_release_status: >-
+      {{
+        (helm_existing_status.stdout | from_json).info.status | default('unknown')
+        if helm_existing_status.rc == 0 and (helm_existing_status.stdout | default('') | trim | length) > 0
+        else 'missing'
+      }}
+
+- name: Remove interrupted Helm release before redeploy
+  command: >
+    /usr/local/bin/helm uninstall {{ helm_release_name }}
+    --namespace {{ helm_namespace }}
+    --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
     --wait
-    --timeout {{ helm_options.timeout | default('5m') }}
-  register: helm_deploy
-  changed_when: "'Release' in helm_deploy.stdout or 'deployed' in helm_deploy.stdout or 'upgraded' in helm_deploy.stdout"
+    --timeout {{ helm_timeout }}
+  register: helm_uninstall_interrupted
+  when: helm_existing_release_status in ['pending-install', 'pending-upgrade', 'pending-rollback']
+
+- name: Deploy Helm release
+  block:
+    - name: Deploy Helm release
+      command: >
+        /usr/local/bin/helm upgrade --install {{ helm_release_name }} {{ helm_chart_deploy_path }}
+        --namespace {{ helm_namespace }}
+        --create-namespace
+        --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+        --values {{ helm_values_file }}
+        --wait
+        --timeout {{ helm_timeout }}
+        --history-max {{ helm_history_max }}
+      register: helm_deploy
+      changed_when: "'Release' in helm_deploy.stdout or 'deployed' in helm_deploy.stdout or 'upgraded' in helm_deploy.stdout"
+
+  rescue:
+    - name: Collect Helm release status after failed deploy
+      command: >
+        /usr/local/bin/helm status {{ helm_release_name }}
+        --namespace {{ helm_namespace }}
+        --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+      register: helm_failed_status
+      changed_when: false
+      failed_when: false
+
+    - name: Collect Kubernetes workload status after failed Helm deploy
+      command: >
+        /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+        get pods,deployments,replicasets,services,ingress
+        --namespace {{ helm_namespace }}
+        --selector app.kubernetes.io/instance={{ helm_release_name }}
+        --output wide
+      register: helm_failed_workloads
+      changed_when: false
+      failed_when: false
+
+    - name: Collect Kubernetes pod descriptions after failed Helm deploy
+      command: >
+        /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+        describe pods
+        --namespace {{ helm_namespace }}
+        --selector app.kubernetes.io/instance={{ helm_release_name }}
+      register: helm_failed_pod_descriptions
+      changed_when: false
+      failed_when: false
+
+    - name: Collect Kubernetes pod logs after failed Helm deploy
+      command: >
+        /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+        logs
+        --namespace {{ helm_namespace }}
+        --selector app.kubernetes.io/instance={{ helm_release_name }}
+        --all-containers
+        --tail=100
+      register: helm_failed_pod_logs
+      changed_when: false
+      failed_when: false
+
+    - name: Collect recent Kubernetes namespace events after failed Helm deploy
+      command: >
+        /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+        get events
+        --namespace {{ helm_namespace }}
+        --sort-by=.lastTimestamp
+      register: helm_failed_events
+      changed_when: false
+      failed_when: false
+
+    - name: Fail with Helm deployment diagnostics
+      fail:
+        msg: |
+          Helm deployment failed for release {{ helm_release_name }} in namespace {{ helm_namespace }}.
+          Helm command stderr:
+          {{ helm_deploy.stderr | default('') }}
+
+          Helm command stdout:
+          {{ helm_deploy.stdout | default('') }}
+
+          Helm status:
+          {{ helm_failed_status.stdout | default(helm_failed_status.stderr | default('unavailable')) }}
+
+          Workloads:
+          {{ helm_failed_workloads.stdout | default(helm_failed_workloads.stderr | default('unavailable')) }}
+
+          Pod descriptions:
+          {{ helm_failed_pod_descriptions.stdout | default(helm_failed_pod_descriptions.stderr | default('unavailable')) }}
+
+          Pod logs:
+          {{ helm_failed_pod_logs.stdout | default(helm_failed_pod_logs.stderr | default('unavailable')) }}
+
+          Recent namespace events:
+          {{ helm_failed_events.stdout | default(helm_failed_events.stderr | default('unavailable')) }}
