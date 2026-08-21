@@ -206,6 +206,8 @@ apps:
           targetPort: 3004
         probes:
           path: /
+        env:
+          HOME: /home/nextjs
         tmpVolume:
           enabled: false
         volumeMounts:
@@ -215,8 +217,12 @@ apps:
             name: var-tmp
           - mountPath: /home/app/.cache
             name: cache
+          - mountPath: /home/nextjs/.cache
+            name: cache
           - mountPath: /home/node/.cache
             name: node-cache
+          - mountPath: /app/.next/cache
+            name: next-cache
         volumes:
           - name: tmp
             emptyDir: {}
@@ -225,6 +231,8 @@ apps:
           - name: cache
             emptyDir: {}
           - name: node-cache
+            emptyDir: {}
+          - name: next-cache
             emptyDir: {}
         ingress:
           enabled: true
@@ -248,6 +256,8 @@ apps:
           targetPort: 3005
         probes:
           path: /
+        env:
+          HOME: /home/nextjs
         tmpVolume:
           enabled: false
         volumeMounts:
@@ -257,8 +267,12 @@ apps:
             name: var-tmp
           - mountPath: /home/app/.cache
             name: cache
+          - mountPath: /home/nextjs/.cache
+            name: cache
           - mountPath: /home/node/.cache
             name: node-cache
+          - mountPath: /app/.next/cache
+            name: next-cache
         volumes:
           - name: tmp
             emptyDir: {}
@@ -267,6 +281,8 @@ apps:
           - name: cache
             emptyDir: {}
           - name: node-cache
+            emptyDir: {}
+          - name: next-cache
             emptyDir: {}
         ingress:
           enabled: true
