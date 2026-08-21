@@ -5,13 +5,19 @@ metadata:
   name: {{ include "dime-app.fullname" . }}
   labels:
     {{- include "dime-app.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
   ingressClassName: {{ .Values.ingress.className }}
   {{- if .Values.ingress.tls.enabled }}
   tls:
     - hosts:
         - {{ .Values.ingress.host }}
+      {{- if .Values.ingress.tls.secretName }}
       secretName: {{ .Values.ingress.tls.secretName }}
+      {{- end }}
   {{- end }}
   rules:
     - host: {{ .Values.ingress.host }}

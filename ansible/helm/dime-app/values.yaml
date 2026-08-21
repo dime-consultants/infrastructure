@@ -46,6 +46,7 @@ service:
 ingress:
   enabled: false
   className: traefik
+  annotations: {}
   host: ""
   tls:
     enabled: false

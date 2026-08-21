@@ -1,0 +1,48 @@
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    certificatesResolvers:
+      {{ k3s.traefik_acme.resolver_name | default('letsencrypt') }}:
+        acme:
+{% if k3s.traefik_acme.email is defined and k3s.traefik_acme.email %}
+          email: {{ k3s.traefik_acme.email | to_json }}
+{% endif %}
+          storage: {{ k3s.traefik_acme.storage | default('/data/acme.json') | to_json }}
+          httpChallenge:
+            entryPoint: web
+    persistence:
+      enabled: true
+      accessMode: ReadWriteOnce
+      size: {{ k3s.traefik_acme.persistence_size | default('128Mi') | to_json }}
+      path: /data
+    deployment:
+      initContainers:
+        - name: acme-storage-permissions
+          image: {{ k3s.traefik_acme.permissions_image | default('busybox:1.36') | to_json }}
+          command:
+            - sh
+            - -c
+            - touch /data/acme.json && chmod 600 /data/acme.json && chown 65532:65532 /data/acme.json
+          securityContext:
+            runAsUser: 0
+            runAsNonRoot: false
+            readOnlyRootFilesystem: false
+          volumeMounts:
+            - name: data
+              mountPath: /data
+    ports:
+      web:
+        http:
+          redirections:
+            entryPoint:
+              to: websecure
+              scheme: https
+      websecure:
+        http:
+          tls:
+            enabled: true
+            certResolver: {{ k3s.traefik_acme.resolver_name | default('letsencrypt') | to_json }}

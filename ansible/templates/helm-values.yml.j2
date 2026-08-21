@@ -61,6 +61,8 @@ service:
 ingress:
   enabled: {{ ingress_config.enabled | default(deployment_app_env.domain is defined and ((deployment_app_env.nginx_managed | default(false)) == false)) | bool | ternary('true', 'false') }}
   className: {{ ingress_config.className | default('traefik') | to_json }}
+  annotations:
+{{ ingress_config.annotations | default({}) | to_nice_yaml(indent=2) | indent(4, true) }}
   host: {{ deployment_app_env.domain | default('') | to_json }}
   tls:
     enabled: {{ ingress_tls_config.enabled | default(false) | bool | ternary('true', 'false') }}

@@ -1,5 +1,13 @@
+{% set route_ingress = route.ingress | default({}) %}
+{% set route_ingress_tls = route_ingress.tls | default({}) %}
 domain: {{ route.domain | to_json }}
 ingressClassName: {{ route.ingress_class_name | default('traefik') | to_json }}
+ingress:
+  annotations:
+{{ route_ingress.annotations | default({}) | to_nice_yaml(indent=2) | indent(4, true) }}
+  tls:
+    enabled: {{ route_ingress_tls.enabled | default(false) | bool | ternary('true', 'false') }}
+    secretName: {{ route_ingress_tls.secretName | default('') | to_json }}
 backend:
   host: {{ route.backend_host | to_json }}
   port: {{ route.backend_port }}

@@ -32,6 +32,10 @@ k3s:
   enabled: true
   disable: []
   install_helm: true
+  traefik_acme:
+    enabled: true
+    resolver_name: letsencrypt
+    storage: /data/acme.json
   firewall_ports:
     - 80
     - 443
@@ -94,6 +98,12 @@ apps:
         ingress:
           enabled: true
           className: traefik
+          annotations:
+            traefik.ingress.kubernetes.io/router.entrypoints: websecure
+            traefik.ingress.kubernetes.io/router.tls: "true"
+            traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+          tls:
+            enabled: true
         helm:
           namespace: prod
       stage:
@@ -108,6 +118,12 @@ apps:
         ingress:
           enabled: true
           className: traefik
+          annotations:
+            traefik.ingress.kubernetes.io/router.entrypoints: websecure
+            traefik.ingress.kubernetes.io/router.tls: "true"
+            traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+          tls:
+            enabled: true
         helm:
           namespace: stage
 
@@ -139,6 +155,12 @@ apps:
         ingress:
           enabled: true
           className: traefik
+          annotations:
+            traefik.ingress.kubernetes.io/router.entrypoints: websecure
+            traefik.ingress.kubernetes.io/router.tls: "true"
+            traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+          tls:
+            enabled: true
         helm:
           namespace: prod
       stage:
@@ -153,6 +175,12 @@ apps:
         ingress:
           enabled: true
           className: traefik
+          annotations:
+            traefik.ingress.kubernetes.io/router.entrypoints: websecure
+            traefik.ingress.kubernetes.io/router.tls: "true"
+            traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+          tls:
+            enabled: true
         helm:
           namespace: stage
 
@@ -178,6 +206,12 @@ apps:
         ingress:
           enabled: true
           className: traefik
+          annotations:
+            traefik.ingress.kubernetes.io/router.entrypoints: websecure
+            traefik.ingress.kubernetes.io/router.tls: "true"
+            traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+          tls:
+            enabled: true
         helm:
           namespace: prod
       stage:
@@ -192,6 +226,12 @@ apps:
         ingress:
           enabled: true
           className: traefik
+          annotations:
+            traefik.ingress.kubernetes.io/router.entrypoints: websecure
+            traefik.ingress.kubernetes.io/router.tls: "true"
+            traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+          tls:
+            enabled: true
         helm:
           namespace: stage
 
