@@ -206,6 +206,26 @@ apps:
           targetPort: 3004
         probes:
           path: /
+        tmpVolume:
+          enabled: false
+        volumeMounts:
+          - mountPath: /tmp
+            name: tmp
+          - mountPath: /var/tmp
+            name: var-tmp
+          - mountPath: /home/app/.cache
+            name: cache
+          - mountPath: /home/node/.cache
+            name: node-cache
+        volumes:
+          - name: tmp
+            emptyDir: {}
+          - name: var-tmp
+            emptyDir: {}
+          - name: cache
+            emptyDir: {}
+          - name: node-cache
+            emptyDir: {}
         ingress:
           enabled: true
           className: traefik
@@ -228,6 +248,26 @@ apps:
           targetPort: 3005
         probes:
           path: /
+        tmpVolume:
+          enabled: false
+        volumeMounts:
+          - mountPath: /tmp
+            name: tmp
+          - mountPath: /var/tmp
+            name: var-tmp
+          - mountPath: /home/app/.cache
+            name: cache
+          - mountPath: /home/node/.cache
+            name: node-cache
+        volumes:
+          - name: tmp
+            emptyDir: {}
+          - name: var-tmp
+            emptyDir: {}
+          - name: cache
+            emptyDir: {}
+          - name: node-cache
+            emptyDir: {}
         ingress:
           enabled: true
           className: traefik
