@@ -23,8 +23,18 @@ securityContext:
     drop:
       - ALL
   privileged: false
-  readOnlyRootFilesystem: false
+  readOnlyRootFilesystem: true
   runAsNonRoot: true
+
+tmpVolume:
+  enabled: true
+  mounts:
+    - name: tmp
+      mountPath: /tmp
+    - name: var-tmp
+      mountPath: /var/tmp
+    - name: cache
+      mountPath: /home/app/.cache
 
 service:
   enabled: true

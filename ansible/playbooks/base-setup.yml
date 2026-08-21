@@ -21,6 +21,58 @@
       service_facts:
 
   tasks:
+    - name: Resolve host routing mode
+      set_fact:
+        effective_nginx_enabled: "{{ nginx_enabled | default(not (k3s.enabled | default(false) | bool)) | bool }}"
+
+    - name: Resolve routes that still require host Nginx
+      set_fact:
+        host_nginx_route_blockers_json: >-
+          {%- set blockers = [] -%}
+          {%- for app in apps | default([]) -%}
+          {%- if app.environments is mapping -%}
+          {%- for env_name, env_options in app.environments.items() -%}
+          {%- set merged_env = app | combine(env_options | default({}), recursive=True) -%}
+          {%- set runtime = merged_env.deployment_type | default(merged_env.runtime | default('compose')) -%}
+          {%- if env_options.domain is defined and (runtime not in ['helm', 'k3s'] or merged_env.nginx_managed | default(runtime == 'compose')) -%}
+          {%- set _ = blockers.append(app.name ~ ':' ~ env_name ~ ' (' ~ env_options.domain ~ ')') -%}
+          {%- endif -%}
+          {%- endfor -%}
+          {%- endif -%}
+          {%- endfor -%}
+          {%- for domain_options in extra_domains | default([]) -%}
+          {%- if domain_options.domain is defined -%}
+          {%- set _ = blockers.append('extra_domain:' ~ domain_options.domain) -%}
+          {%- endif -%}
+          {%- endfor -%}
+          {%- for service in shared_services | default([]) -%}
+          {%- if service.environments is mapping -%}
+          {%- for env_name, env_options in service.environments.items() -%}
+          {%- if env_options.domain is defined -%}
+          {%- set _ = blockers.append('shared_service:' ~ service.name ~ ':' ~ env_name ~ ' (' ~ env_options.domain ~ ')') -%}
+          {%- endif -%}
+          {%- endfor -%}
+          {%- endif -%}
+          {%- endfor -%}
+          {{ blockers | to_json }}
+
+    - name: Parse host Nginx route blockers
+      set_fact:
+        host_nginx_route_blockers: "{{ host_nginx_route_blockers_json | from_json }}"
+
+    - name: Refuse to disable Nginx while routes still depend on it
+      assert:
+        that:
+          - host_nginx_route_blockers | length == 0
+        fail_msg: >-
+          K3s is configured to own ports 80/443 and host Nginx would be disabled,
+          but these routes still depend on host Nginx: {{ host_nginx_route_blockers | join(', ') }}.
+          Migrate apps to deployment_type: helm with nginx_managed: false and ingress.enabled: true,
+          or set nginx_enabled: true until migration is complete.
+      when:
+        - k3s.enabled | default(false) | bool
+        - not effective_nginx_enabled
+
     - name: Remove previously managed Docker apt repository
       file:
         path: "{{ item }}"
@@ -141,9 +193,24 @@
         name: "{{ common_packages }}"
         state: present
 
+    - name: Install Nginx packages
+      apt:
+        name: "{{ nginx_packages }}"
+        state: present
+      when: effective_nginx_enabled
+
     - name: Install and configure K3s
       include_tasks: ../tasks/install-k3s.yml
       when: k3s.enabled | default(false) | bool
+
+    - name: Stop and disable host Nginx when Kubernetes owns HTTP ports
+      service:
+        name: nginx
+        state: stopped
+        enabled: false
+      when:
+        - not effective_nginx_enabled
+        - "'nginx.service' in ansible_facts.services"
 
     - name: Configure security baseline
       include_tasks: ../tasks/configure-security.yml
@@ -190,11 +257,13 @@
         path: /var/www/letsencrypt
         state: directory
         mode: '0755'
+      when: effective_nginx_enabled
 
     - name: Resolve Nginx basic auth credentials
       set_fact:
         basic_auth_username: "{{ lookup('env', 'BASIC_AUTH_USERNAME') }}"
         basic_auth_password: "{{ lookup('env', 'BASIC_AUTH_PASSWORD') }}"
+      when: effective_nginx_enabled
 
     - name: Resolve domains requiring Nginx basic auth
       set_fact:
@@ -215,10 +284,12 @@
           {%- endif -%}
           {%- endfor -%}
           {{ auth.domains | to_json }}
+      when: effective_nginx_enabled
 
     - name: Parse domains requiring Nginx basic auth
       set_fact:
         basic_auth_domains: "{{ basic_auth_domains_json | from_json }}"
+      when: effective_nginx_enabled
 
     - name: Validate Nginx basic auth credentials
       assert:
@@ -228,12 +299,17 @@
         fail_msg: >-
           BASIC_AUTH_USERNAME and BASIC_AUTH_PASSWORD GitHub Secrets are required
           because these domains use basic_auth: {{ basic_auth_domains | join(', ') }}.
-      when: basic_auth_domains | length > 0
+      when:
+        - effective_nginx_enabled
+        - basic_auth_domains | length > 0
 
     - name: Install htpasswd utility
       apt:
         name: apache2-utils
         state: present
+      when:
+        - effective_nginx_enabled
+        - basic_auth_domains | default([]) | length > 0
 
     - name: Create or update .htpasswd file with basic auth credentials
       community.general.htpasswd:
@@ -244,7 +320,9 @@
         group: www-data
         mode: '0640'
         state: present
-      when: basic_auth_domains | length > 0
+      when:
+        - effective_nginx_enabled
+        - basic_auth_domains | length > 0
 
     - name: Generate Nginx sites for all apps and environments
       include_tasks: ../tasks/generate-nginx.yml
@@ -252,6 +330,7 @@
         apps: "{{ hostvars[inventory_hostname].apps | default([]) }}"
         extra_domains: "{{ hostvars[inventory_hostname].extra_domains | default([]) }}"
         shared_services: "{{ hostvars[inventory_hostname].shared_services | default([]) }}"
+      when: effective_nginx_enabled
 
   handlers:
     - name: Reload Nginx
