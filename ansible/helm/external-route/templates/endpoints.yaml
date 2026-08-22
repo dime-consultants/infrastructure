@@ -1,3 +1,4 @@
+{{- if regexMatch "^([0-9]{1,3}\\.){3}[0-9]{1,3}$" .Values.backend.host }}
 apiVersion: v1
 kind: Endpoints
 metadata:
@@ -11,3 +12,4 @@ subsets:
       - name: http
         port: {{ .Values.backend.port }}
         protocol: TCP
+{{- end }}

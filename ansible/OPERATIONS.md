@@ -162,7 +162,7 @@ apps:
       prod:
         namespace: prod
         domain: billing-api.dimeconsultants.africa
-        replicas: 3
+        replicas: 1
         container_port: 8000
         service:
           type: ClusterIP
@@ -196,7 +196,9 @@ helm:
 
 SSL is runtime-specific. Host Nginx mode uses certbot webroot certificates and
 installs a renewal hook that reloads Nginx after successful renewals. K3s mode
-uses Traefik ACME instead, because Traefik owns ports 80 and 443.
+does not run certbot because Traefik owns ports 80 and 443; use cert-manager
+for default Kubernetes TLS secrets, or Traefik ACME for Ingresses that
+explicitly set a Traefik certificate resolver annotation.
 
 ```yaml
 certbot:
@@ -204,6 +206,12 @@ certbot:
   email: admin@example.com
 
 k3s:
+  cert_manager:
+    enabled: true
+    cluster_issuer:
+      enabled: true
+      name: letsencrypt-prod
+      email: admin@example.com
   traefik_acme:
     enabled: true
     email: admin@example.com

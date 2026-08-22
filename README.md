@@ -91,16 +91,28 @@ certbot:
   fail_on_error: false
 ```
 
-K3s mode does not run certbot because Traefik owns ports 80/443. Use Traefik
-ACME there:
+K3s mode does not run certbot because Traefik owns ports 80/443. Enable
+cert-manager when Ingress TLS secrets should be issued automatically for every
+domain, or use Traefik ACME for routes that explicitly set a Traefik
+`router.tls.certresolver` annotation:
 
 ```yaml
 k3s:
+  cert_manager:
+    enabled: true
+    cluster_issuer:
+      enabled: true
+      name: letsencrypt-prod
+      email: admin@example.com
   traefik_acme:
     enabled: true
     email: admin@example.com
     resolver_name: letsencrypt
 ```
+
+When either K3s certificate path is enabled, app and external-route Ingresses
+default TLS on for configured domains. If cert-manager is selected, the default
+secret name is the domain slug plus `-tls`.
 
 ## Compose App
 
@@ -148,7 +160,7 @@ apps:
     environments:
       prod:
         domain: billing-api.dimeconsultants.africa
-        replicas: 3
+        replicas: 1
         container_port: 8000
         service:
           type: ClusterIP
@@ -218,7 +230,7 @@ apps:
     rabbitmq_namespace: billing
     environments:
       prod:
-        replicas: 2
+        replicas: 1
         command: ["celery"]
         args: ["-A", "app.worker", "worker", "--loglevel=info"]
         service:

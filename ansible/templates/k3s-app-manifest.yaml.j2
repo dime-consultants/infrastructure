@@ -3,6 +3,30 @@
 {% set service_config = deployment_app_env.service | default({}) %}
 {% set ingress_config = deployment_app_env.ingress | default({}) %}
 {% set ingress_tls_config = ingress_config.tls | default({}) %}
+{% set cert_manager_config = k3s.cert_manager | default({}) %}
+{% set cert_manager_issuer = cert_manager_config.cluster_issuer | default({}) %}
+{% set cert_manager_enabled = cert_manager_config.enabled | default(false) | bool and cert_manager_issuer.enabled | default(true) | bool %}
+{% set traefik_acme_config = k3s.traefik_acme | default({}) %}
+{% set traefik_acme_enabled = traefik_acme_config.enabled | default(false) | bool %}
+{% set ingress_domain = deployment_app_env.domain | default('') %}
+{% set explicit_ingress_annotations = ingress_config.annotations | default({}) %}
+{% set explicit_traefik_acme = explicit_ingress_annotations['traefik.ingress.kubernetes.io/router.tls.certresolver'] is defined %}
+{% set use_cert_manager_defaults = cert_manager_enabled and not explicit_traefik_acme %}
+{% set use_traefik_acme_defaults = traefik_acme_enabled and not cert_manager_enabled %}
+{% set ingress_tls_enabled = ingress_tls_config.enabled | default((ingress_domain | length > 0) and (use_cert_manager_defaults or use_traefik_acme_defaults or explicit_traefik_acme)) | bool %}
+{% set ingress_tls_secret_name = ingress_tls_config.secretName | default((ingress_domain ~ '-tls') | regex_replace('[^A-Za-z0-9-]', '-') | lower if use_cert_manager_defaults and ingress_domain else '') %}
+{% set default_ingress_annotations = {} %}
+{% if use_cert_manager_defaults %}
+{% set _ = default_ingress_annotations.update({'cert-manager.io/cluster-issuer': cert_manager_issuer.name | default('letsencrypt-prod')}) %}
+{% endif %}
+{% if use_traefik_acme_defaults %}
+{% set _ = default_ingress_annotations.update({
+  'traefik.ingress.kubernetes.io/router.entrypoints': 'websecure',
+  'traefik.ingress.kubernetes.io/router.tls': 'true',
+  'traefik.ingress.kubernetes.io/router.tls.certresolver': traefik_acme_config.resolver_name | default('letsencrypt')
+}) %}
+{% endif %}
+{% set ingress_annotations = default_ingress_annotations | combine(explicit_ingress_annotations) %}
 {% set probes_config = deployment_app_env.probes | default({}) %}
 {% set tmp_volume_config = deployment_app_env.tmpVolume | default({
   'enabled': true,
@@ -63,7 +87,7 @@ metadata:
   labels:
 {{ app_labels | to_nice_yaml(indent=2) | indent(4, true) }}
 spec:
-  replicas: {{ deployment_app_env.replicas | default(k3s_app_config.replicas | default(2)) }}
+  replicas: {{ deployment_app_env.replicas | default(k3s_app_config.replicas | default(1)) }}
   selector:
     matchLabels:
 {{ selector_labels | to_nice_yaml(indent=2) | indent(6, true) }}
@@ -205,18 +229,18 @@ metadata:
   namespace: {{ k3s_namespace }}
   labels:
 {{ app_labels | to_nice_yaml(indent=2) | indent(4, true) }}
-{% if ingress_config.annotations | default({}) %}
+{% if ingress_annotations %}
   annotations:
-{{ ingress_config.annotations | to_nice_yaml(indent=2) | indent(4, true) }}
+{{ ingress_annotations | to_nice_yaml(indent=2) | indent(4, true) }}
 {% endif %}
 spec:
   ingressClassName: {{ ingress_config.className | default('traefik') }}
-{% if ingress_tls_config.enabled | default(false) | bool %}
+{% if ingress_tls_enabled %}
   tls:
     - hosts:
         - {{ deployment_app_env.domain }}
-{% if ingress_tls_config.secretName | default('') %}
-      secretName: {{ ingress_tls_config.secretName }}
+{% if ingress_tls_secret_name %}
+      secretName: {{ ingress_tls_secret_name }}
 {% endif %}
 {% endif %}
   rules:
