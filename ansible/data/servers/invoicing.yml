@@ -43,7 +43,7 @@ k3s:
     run_now: true
   traefik_acme:
     enabled: true
-    email: admin@mchangohub.com
+    email: stephenosiru@gmail.com
     resolver_name: letsencrypt
     storage: /data/acme.json
   cert_manager:
@@ -52,7 +52,7 @@ k3s:
     cluster_issuer:
       enabled: true
       name: letsencrypt-prod
-      email: admin@mchangohub.com
+      email: stephenosiru@gmail.com
       server: https://acme-v02.api.letsencrypt.org/directory
       private_key_secret_name: letsencrypt-prod-key
       ingress_class: traefik
