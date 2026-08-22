@@ -105,6 +105,24 @@
   changed_when: false
   when: "'traefik' not in (k3s.disable | default([]))"
 
+- name: Scale down metrics-server when disabled
+  command: >
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    -n kube-system scale deployment metrics-server --replicas=0
+  register: k3s_metrics_server_scale_down
+  changed_when: "'scaled' in k3s_metrics_server_scale_down.stdout"
+  failed_when: false
+  when: "'metrics-server' in (k3s.disable | default([]))"
+
+- name: Remove metrics APIService when metrics-server is disabled
+  command: >
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    delete apiservice v1beta1.metrics.k8s.io --ignore-not-found=true
+  register: k3s_metrics_api_service_remove
+  changed_when: "'deleted' in k3s_metrics_api_service_remove.stdout"
+  failed_when: false
+  when: "'metrics-server' in (k3s.disable | default([]))"
+
 - name: Configure cert-manager
   include_tasks: "{{ playbook_dir }}/../tasks/configure-cert-manager.yml"
   when: k3s.cert_manager.enabled | default(false) | bool

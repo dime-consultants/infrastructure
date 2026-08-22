@@ -30,7 +30,8 @@ migration_cleanup:
 
 k3s:
   enabled: true
-  disable: []
+  disable:
+    - metrics-server
   install_helm: false
   space_guard:
     enabled: true
