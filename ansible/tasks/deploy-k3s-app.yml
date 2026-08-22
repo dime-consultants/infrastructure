@@ -69,6 +69,12 @@
     - k3s is defined
     - k3s.cert_manager.enabled | default(false) | bool
 
+- name: Configure and run K3s space guard before direct deploy
+  include_tasks: "{{ playbook_dir }}/../tasks/configure-k3s-space-guard.yml"
+  when:
+    - k3s is defined
+    - k3s.space_guard.enabled | default(true) | bool
+
 - name: Create or update Kubernetes namespace for direct deploy
   command: >
     /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}

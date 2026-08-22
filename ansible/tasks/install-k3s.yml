@@ -109,6 +109,10 @@
   include_tasks: "{{ playbook_dir }}/../tasks/configure-cert-manager.yml"
   when: k3s.cert_manager.enabled | default(false) | bool
 
+- name: Configure K3s space guard
+  include_tasks: "{{ playbook_dir }}/../tasks/configure-k3s-space-guard.yml"
+  when: k3s.space_guard.enabled | default(true) | bool
+
 - name: Check whether Helm is installed
   stat:
     path: /usr/local/bin/helm

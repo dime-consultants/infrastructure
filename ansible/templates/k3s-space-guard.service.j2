@@ -1,0 +1,8 @@
+[Unit]
+Description=K3s space guard cleanup
+After=k3s.service
+ConditionPathExists=/usr/local/bin/k3s
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/k3s-space-guard.sh

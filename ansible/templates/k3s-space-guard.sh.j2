@@ -1,0 +1,69 @@
+#!/bin/sh
+set -eu
+
+KUBECTL="/usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}"
+CRICTL="/usr/local/bin/k3s crictl"
+MAX_DISK_USE_PERCENT="{{ k3s.space_guard.max_disk_use_percent | default(85) }}"
+JOURNAL_VACUUM_SIZE="{{ k3s.space_guard.journal_vacuum_size | default('300M') }}"
+TEMP_FILE_MIN_AGE_DAYS="{{ k3s.space_guard.temp_file_min_age_days | default(2) }}"
+
+max_disk_usage() {
+  df -P / /var/lib/rancher/k3s /var/lib/kubelet 2>/dev/null |
+    awk 'NR > 1 { gsub("%", "", $5); if ($5 > max) max=$5 } END { print max + 0 }'
+}
+
+print_disk_usage() {
+  echo "Disk usage:"
+  df -h / /var/lib/rancher/k3s /var/lib/kubelet 2>/dev/null || df -h /
+  echo
+  echo "Inode usage:"
+  df -ih / /var/lib/rancher/k3s /var/lib/kubelet 2>/dev/null || df -ih /
+}
+
+cleanup_pods() {
+  if $KUBECTL get nodes >/dev/null 2>&1; then
+    $KUBECTL delete pod -A --field-selector=status.phase=Succeeded --ignore-not-found=true --wait=false || true
+    $KUBECTL delete pod -A --field-selector=status.phase=Failed --ignore-not-found=true --wait=false || true
+  fi
+}
+
+cleanup_containerd() {
+  if $CRICTL info >/dev/null 2>&1; then
+    $CRICTL rmp --prune || true
+    $CRICTL rmi --prune || true
+  fi
+}
+
+cleanup_logs_and_tmp() {
+  journalctl --vacuum-size="$JOURNAL_VACUUM_SIZE" || true
+  find /tmp /var/tmp -xdev -mindepth 1 -mtime +"$TEMP_FILE_MIN_AGE_DAYS" -exec rm -rf {} + 2>/dev/null || true
+  find /var/log -xdev -type f \( -name '*.gz' -o -name '*.xz' -o -name '*.1' -o -name '*.old' \) -mtime +"$TEMP_FILE_MIN_AGE_DAYS" -delete 2>/dev/null || true
+  rm -rf /var/cache/apt/archives/*.deb /var/cache/apt/archives/partial/* 2>/dev/null || true
+}
+
+print_disk_usage
+
+echo "Removing completed and failed pods."
+cleanup_pods
+cleanup_exited_pods_done=false
+if $CRICTL info >/dev/null 2>&1; then
+  $CRICTL rmp --prune || true
+  cleanup_exited_pods_done=true
+fi
+
+before="$(max_disk_usage)"
+if [ "$before" -ge "$MAX_DISK_USE_PERCENT" ] || [ "${1:-}" = "--force" ]; then
+  echo "Running K3s space guard cleanup. Current max disk usage: ${before}%."
+  if [ "$cleanup_exited_pods_done" = false ]; then
+    cleanup_containerd
+  else
+    $CRICTL rmi --prune || true
+  fi
+  cleanup_logs_and_tmp
+else
+  echo "K3s space guard cleanup skipped. Current max disk usage ${before}% is below ${MAX_DISK_USE_PERCENT}%."
+fi
+
+after="$(max_disk_usage)"
+print_disk_usage
+echo "K3s space guard complete. Max disk usage: ${after}%."

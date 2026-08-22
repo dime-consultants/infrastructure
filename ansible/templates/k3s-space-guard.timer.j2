@@ -1,0 +1,11 @@
+[Unit]
+Description=Run K3s space guard cleanup periodically
+
+[Timer]
+OnBootSec={{ k3s.space_guard.on_boot_sec | default('10m') }}
+OnUnitActiveSec={{ k3s.space_guard.on_unit_active_sec | default('1h') }}
+RandomizedDelaySec={{ k3s.space_guard.randomized_delay_sec | default('10m') }}
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,46 @@
+---
+- name: Install K3s space guard script
+  template:
+    src: ../templates/k3s-space-guard.sh.j2
+    dest: /usr/local/sbin/k3s-space-guard.sh
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install K3s space guard service
+  template:
+    src: ../templates/k3s-space-guard.service.j2
+    dest: /etc/systemd/system/k3s-space-guard.service
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install K3s space guard timer
+  template:
+    src: ../templates/k3s-space-guard.timer.j2
+    dest: /etc/systemd/system/k3s-space-guard.timer
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Reload systemd for K3s space guard
+  systemd:
+    daemon_reload: true
+
+- name: Enable and start K3s space guard timer
+  systemd:
+    name: k3s-space-guard.timer
+    enabled: true
+    state: started
+
+- name: Run K3s space guard now
+  command: /usr/local/sbin/k3s-space-guard.sh
+  register: k3s_space_guard_run
+  changed_when: "'Running K3s space guard cleanup' in k3s_space_guard_run.stdout"
+  failed_when: false
+  when: k3s.space_guard.run_now | default(true) | bool
+
+- name: Print K3s space guard output
+  debug:
+    msg: "{{ k3s_space_guard_run.stdout_lines | default([]) }}"
+  when: k3s.space_guard.run_now | default(true) | bool

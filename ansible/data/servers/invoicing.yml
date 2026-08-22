@@ -31,7 +31,16 @@ migration_cleanup:
 k3s:
   enabled: true
   disable: []
-  install_helm: true
+  install_helm: false
+  space_guard:
+    enabled: true
+    max_disk_use_percent: 82
+    journal_vacuum_size: 300M
+    temp_file_min_age_days: 2
+    on_boot_sec: 10m
+    on_unit_active_sec: 1h
+    randomized_delay_sec: 10m
+    run_now: true
   traefik_acme:
     enabled: true
     email: admin@mchangohub.com
