@@ -5,6 +5,11 @@ ingress:
   tls:
     enabled: false
     secretName: ""
+certificate:
+  enabled: false
+  issuerRef:
+    name: ""
+    kind: ClusterIssuer
 backend:
   host: ""
   port: 80

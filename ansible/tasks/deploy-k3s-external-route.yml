@@ -7,6 +7,10 @@
     external_route_chart_remote_path: "/tmp/external-route-chart"
     external_route_backend_host_raw: "{{ route.backend_host }}"
 
+- name: Resolve external route chart resource names
+  set_fact:
+    external_route_chart_fullname: "{{ (external_route_release ~ '-external-route') | truncate(63, true, '') | regex_replace('-$', '') }}"
+
 - name: Resolve external route backend hostname to IPv4
   shell: |
     set -eu
@@ -64,3 +68,43 @@
     --timeout 3m
   register: external_route_deploy
   changed_when: "'Release' in external_route_deploy.stdout or 'deployed' in external_route_deploy.stdout or 'upgraded' in external_route_deploy.stdout"
+
+- name: Wait for external route TLS certificate
+  command: >
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    -n {{ external_route_namespace }}
+    wait certificate {{ external_route_chart_fullname }}-tls
+    --for=condition=Ready
+    --timeout={{ route.certificate_ready_timeout | default('180s') }}
+  register: external_route_certificate_wait
+  changed_when: false
+  failed_when: false
+  when:
+    - k3s.cert_manager.enabled | default(false) | bool
+    - k3s.cert_manager.cluster_issuer.enabled | default(true) | bool
+
+- name: Show external route certificate status when not ready
+  command: >
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    -n {{ external_route_namespace }}
+    describe certificate {{ external_route_chart_fullname }}-tls
+  register: external_route_certificate_status
+  changed_when: false
+  failed_when: false
+  when:
+    - external_route_certificate_wait is defined
+    - external_route_certificate_wait.rc | default(0) != 0
+
+- name: Fail when external route TLS certificate is not ready
+  fail:
+    msg: |
+      TLS certificate for {{ route.domain }} did not become Ready.
+
+      kubectl wait:
+      {{ external_route_certificate_wait.stderr | default(external_route_certificate_wait.stdout | default('unavailable')) }}
+
+      Certificate status:
+      {{ external_route_certificate_status.stdout | default(external_route_certificate_status.stderr | default('unavailable')) }}
+  when:
+    - external_route_certificate_wait is defined
+    - external_route_certificate_wait.rc | default(0) != 0

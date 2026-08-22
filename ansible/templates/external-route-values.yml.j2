@@ -31,6 +31,11 @@ ingress:
   tls:
     enabled: {{ route_tls_enabled | ternary('true', 'false') }}
     secretName: {{ route_tls_secret_name | to_json }}
+certificate:
+  enabled: {{ (use_cert_manager_defaults and route_tls_enabled and (route_tls_secret_name | length > 0)) | ternary('true', 'false') }}
+  issuerRef:
+    name: {{ cert_manager_issuer.name | default('letsencrypt-prod') | to_json }}
+    kind: ClusterIssuer
 backend:
   host: {{ external_route_backend_host | default(route.backend_host) | to_json }}
   port: {{ route.backend_port }}
