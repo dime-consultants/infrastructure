@@ -105,6 +105,10 @@
   changed_when: false
   when: "'traefik' not in (k3s.disable | default([]))"
 
+- name: Configure cert-manager
+  include_tasks: "{{ playbook_dir }}/../tasks/configure-cert-manager.yml"
+  when: k3s.cert_manager.enabled | default(false) | bool
+
 - name: Check whether Helm is installed
   stat:
     path: /usr/local/bin/helm

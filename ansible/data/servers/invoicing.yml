@@ -37,6 +37,16 @@ k3s:
     email: admin@mchangohub.com
     resolver_name: letsencrypt
     storage: /data/acme.json
+  cert_manager:
+    enabled: true
+    install_manifest_url: https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
+    cluster_issuer:
+      enabled: true
+      name: letsencrypt-prod
+      email: admin@mchangohub.com
+      server: https://acme-v02.api.letsencrypt.org/directory
+      private_key_secret_name: letsencrypt-prod-key
+      ingress_class: traefik
   firewall_ports:
     - 80
     - 443
@@ -202,12 +212,12 @@ apps:
       prod:
         domain: guardian.dimeconsultants.africa
         nginx_managed: false
-        port: 3004
-        container_port: 3004
+        port: 3000
+        container_port: 3000
         service:
           type: ClusterIP
           port: 80
-          targetPort: 3004
+          targetPort: 3000
         probes:
           path: /
         env:
@@ -242,22 +252,23 @@ apps:
           enabled: true
           className: traefik
           annotations:
+            cert-manager.io/cluster-issuer: letsencrypt-prod
             traefik.ingress.kubernetes.io/router.entrypoints: websecure
             traefik.ingress.kubernetes.io/router.tls: "true"
-            traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
           tls:
             enabled: true
+            secretName: guardian-prod-tls
         helm:
           namespace: prod
       stage:
         domain: stage-guardian.dimeconsultants.africa
         nginx_managed: false
-        port: 3005
-        container_port: 3005
+        port: 3000
+        container_port: 3000
         service:
           type: ClusterIP
           port: 80
-          targetPort: 3005
+          targetPort: 3000
         probes:
           path: /
         env:
@@ -292,11 +303,12 @@ apps:
           enabled: true
           className: traefik
           annotations:
+            cert-manager.io/cluster-issuer: letsencrypt-prod
             traefik.ingress.kubernetes.io/router.entrypoints: websecure
             traefik.ingress.kubernetes.io/router.tls: "true"
-            traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
           tls:
             enabled: true
+            secretName: guardian-stage-tls
         helm:
           namespace: stage
 

@@ -1,0 +1,43 @@
+---
+- name: Install cert-manager
+  command: >
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    apply -f {{ k3s.cert_manager.install_manifest_url | default('https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml') }}
+  register: cert_manager_install
+  changed_when: "'created' in cert_manager_install.stdout or 'configured' in cert_manager_install.stdout"
+  when: k3s.cert_manager.enabled | default(false) | bool
+
+- name: Wait for cert-manager controller
+  command: >
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    -n cert-manager rollout status deployment/cert-manager --timeout=180s
+  changed_when: false
+  when: k3s.cert_manager.enabled | default(false) | bool
+
+- name: Wait for cert-manager webhook
+  command: >
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    -n cert-manager rollout status deployment/cert-manager-webhook --timeout=180s
+  changed_when: false
+  when: k3s.cert_manager.enabled | default(false) | bool
+
+- name: Render cert-manager ClusterIssuer
+  template:
+    src: ../templates/cert-manager-clusterissuer.yaml.j2
+    dest: /var/lib/rancher/k3s/server/manifests/cert-manager-clusterissuer.yaml
+    owner: root
+    group: root
+    mode: "0600"
+  when:
+    - k3s.cert_manager.enabled | default(false) | bool
+    - k3s.cert_manager.cluster_issuer.enabled | default(true) | bool
+
+- name: Apply cert-manager ClusterIssuer
+  command: >
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    apply -f /var/lib/rancher/k3s/server/manifests/cert-manager-clusterissuer.yaml
+  register: cert_manager_clusterissuer_apply
+  changed_when: "'created' in cert_manager_clusterissuer_apply.stdout or 'configured' in cert_manager_clusterissuer_apply.stdout"
+  when:
+    - k3s.cert_manager.enabled | default(false) | bool
+    - k3s.cert_manager.cluster_issuer.enabled | default(true) | bool

@@ -1,0 +1,14 @@
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: {{ k3s.cert_manager.cluster_issuer.name | default('letsencrypt-prod') }}
+spec:
+  acme:
+    server: {{ k3s.cert_manager.cluster_issuer.server | default('https://acme-v02.api.letsencrypt.org/directory') }}
+    email: {{ k3s.cert_manager.cluster_issuer.email | to_json }}
+    privateKeySecretRef:
+      name: {{ k3s.cert_manager.cluster_issuer.private_key_secret_name | default('letsencrypt-prod-key') }}
+    solvers:
+      - http01:
+          ingress:
+            class: {{ k3s.cert_manager.cluster_issuer.ingress_class | default('traefik') }}

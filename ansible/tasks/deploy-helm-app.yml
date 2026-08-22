@@ -97,6 +97,28 @@
       Check network access to K3s/Helm installers, systemd status, and disk space on {{ inventory_hostname }}.
   when: helm_fail_on_error | bool
 
+- name: Configure Traefik ACME certificates before Helm app deploy
+  template:
+    src: ../templates/traefik-config.yaml.j2
+    dest: /var/lib/rancher/k3s/server/manifests/traefik-config.yaml
+    owner: root
+    group: root
+    mode: "0600"
+  when:
+    - helm_k3s_binary.stat.exists
+    - helm_k3s_kubeconfig.stat.exists
+    - k3s is defined
+    - "'traefik' not in (k3s.disable | default([]))"
+    - (k3s.traefik_acme | default({})).enabled | default(false) | bool
+
+- name: Configure cert-manager before Helm app deploy
+  include_tasks: "{{ playbook_dir }}/../tasks/configure-cert-manager.yml"
+  when:
+    - helm_k3s_binary.stat.exists
+    - helm_k3s_kubeconfig.stat.exists
+    - k3s is defined
+    - k3s.cert_manager.enabled | default(false) | bool
+
 - name: Report missing K3s or Helm and skip Helm deployment without failing pipeline
   debug:
     msg: >-
