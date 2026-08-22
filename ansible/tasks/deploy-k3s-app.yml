@@ -1,0 +1,119 @@
+---
+- name: Validate K3s deployment settings
+  assert:
+    that:
+      - (deployment_app_env.image is defined and deployment_app_env.image.repository is defined) or image_tag is defined or force_image_tag is defined
+    fail_msg: "K3s deployments require deployment_app_env.image.repository or an image_tag/force_image_tag."
+
+- name: Resolve K3s option maps
+  set_fact:
+    k3s_app_options: "{{ deployment_app_env.k3s | default({}) }}"
+    image_options: "{{ deployment_app_env.image | default({}) }}"
+    k3s_dynamic_secret_env: {}
+
+- name: Load generated environment file for K3s
+  set_fact:
+    k3s_dynamic_secret_env: >-
+      {{
+        lookup(
+          'pipe',
+          'python3 ' ~ ((playbook_dir ~ '/../scripts/deployment_resolver.py') | quote) ~
+          ' dotenv-json --input ' ~ (env_file | quote)
+        ) | from_json
+      }}
+  when: env_file is defined
+
+- name: Resolve K3s deployment facts
+  set_fact:
+    k3s_app_release_name: "{{ k3s_app_options.release_name | default((deployment_app.name ~ '-' ~ env) | regex_replace('[^A-Za-z0-9-]', '-')) }}"
+    k3s_namespace: "{{ k3s_app_options.namespace | default(env) }}"
+    k3s_manifest_file: "{{ app_dir }}/k3s-manifest.yml"
+    k3s_image_tag: "{{ force_image_tag | default(image_tag | default(image_options.tag | default('latest'))) }}"
+    k3s_container_port: "{{ (deployment_app_env.service | default({})).targetPort | default(deployment_app_env.container_port | default(8000)) }}"
+
+- name: Resolve K3s resource name
+  set_fact:
+    k3s_app_resource_name: "{{ k3s_app_options.resource_name | default((k3s_app_release_name ~ '-dime-app') | regex_replace('[^A-Za-z0-9-]', '-')) }}"
+
+- name: Check K3s binary before direct deploy
+  stat:
+    path: /usr/local/bin/k3s
+  register: direct_k3s_binary
+
+- name: Check K3s kubeconfig before direct deploy
+  stat:
+    path: "{{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}"
+  register: direct_k3s_kubeconfig
+
+- name: Bootstrap K3s before direct deploy when missing
+  include_tasks: "{{ playbook_dir }}/../tasks/install-k3s.yml"
+  when:
+    - k3s.enabled | default(false) | bool
+    - not direct_k3s_binary.stat.exists or not direct_k3s_kubeconfig.stat.exists
+
+- name: Configure Traefik ACME certificates before direct deploy
+  template:
+    src: ../templates/traefik-config.yaml.j2
+    dest: /var/lib/rancher/k3s/server/manifests/traefik-config.yaml
+    owner: root
+    group: root
+    mode: "0600"
+  when:
+    - k3s is defined
+    - "'traefik' not in (k3s.disable | default([]))"
+    - (k3s.traefik_acme | default({})).enabled | default(false) | bool
+
+- name: Configure cert-manager before direct deploy
+  include_tasks: "{{ playbook_dir }}/../tasks/configure-cert-manager.yml"
+  when:
+    - k3s is defined
+    - k3s.cert_manager.enabled | default(false) | bool
+
+- name: Create or update Kubernetes namespace for direct deploy
+  command: >
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    create namespace {{ k3s_namespace }}
+    --dry-run=client
+    -o yaml
+  register: direct_namespace_manifest
+  changed_when: false
+
+- name: Apply Kubernetes namespace for direct deploy
+  command: >
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    apply -f -
+  args:
+    stdin: "{{ direct_namespace_manifest.stdout }}"
+  register: direct_namespace_apply
+  changed_when: "'created' in direct_namespace_apply.stdout or 'configured' in direct_namespace_apply.stdout"
+
+- name: Render direct K3s manifest
+  template:
+    src: ../templates/k3s-app-manifest.yaml.j2
+    dest: "{{ k3s_manifest_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Normalize existing Deployment port list before direct K3s apply
+  command: >
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    -n {{ k3s_namespace }}
+    patch deployment {{ k3s_app_resource_name }}
+    --type=json
+    --patch '[{"op":"replace","path":"/spec/template/spec/containers/0/ports","value":[{"name":"http","containerPort":{{ k3s_container_port }},"protocol":"TCP"}]}]'
+  register: direct_deployment_ports_patch
+  changed_when: direct_deployment_ports_patch.rc == 0
+  failed_when: false
+  when: k3s_app_options.normalize_deployment_ports | default(true) | bool
+
+- name: Apply direct K3s manifest
+  command: >
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    apply -f {{ k3s_manifest_file }}
+  register: direct_k3s_apply
+  changed_when: "'created' in direct_k3s_apply.stdout or 'configured' in direct_k3s_apply.stdout"
+
+- name: Report direct K3s apply output
+  debug:
+    msg: "{{ direct_k3s_apply.stdout_lines }}"

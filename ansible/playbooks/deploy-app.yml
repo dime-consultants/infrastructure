@@ -121,7 +121,7 @@
       assert:
         that:
           - compose_file is defined
-        fail_msg: "Compose deployments require compose_file. Set deployment_type: helm for K3s/Helm apps."
+        fail_msg: "Compose deployments require compose_file. Set deployment_type: k3s or helm for Kubernetes apps."
       when: deployment_runtime == 'compose'
 
     - name: Force image tag override (for rollback)
@@ -166,7 +166,11 @@
 
     - name: Deploy with Helm on K3s
       include_tasks: ../tasks/deploy-helm-app.yml
-      when: deployment_runtime in ['helm', 'k3s']
+      when: deployment_runtime == 'helm'
+
+    - name: Deploy directly on K3s
+      include_tasks: ../tasks/deploy-k3s-app.yml
+      when: deployment_runtime == 'k3s'
 
     - name: Post-deploy Docker maintenance and disk check
       include_tasks: ../tasks/configure-docker-maintenance.yml

@@ -83,7 +83,7 @@ shared_services:
 apps:
   - name: invoicing
     repo: dime-consultants/ai_invoicing
-    deployment_type: helm
+    deployment_type: k3s
     aliases:
       - ai_invoicing
       - invoicing.dimeconsultants.africa
@@ -117,7 +117,7 @@ apps:
             traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
           tls:
             enabled: true
-        helm:
+        k3s:
           namespace: prod
       stage:
         domain: stage-invoicing.dimeconsultants.africa
@@ -139,12 +139,12 @@ apps:
             traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
           tls:
             enabled: true
-        helm:
+        k3s:
           namespace: stage
 
   - name: hrpayroll
     repo: dime-consultants/hrpayroll
-    deployment_type: helm
+    deployment_type: k3s
     aliases:
       - hrpayroll
       - hr.dimeconsultants.africa
@@ -176,7 +176,7 @@ apps:
             traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
           tls:
             enabled: true
-        helm:
+        k3s:
           namespace: prod
       stage:
         domain: stage-hr.dimeconsultants.africa
@@ -196,12 +196,12 @@ apps:
             traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
           tls:
             enabled: true
-        helm:
+        k3s:
           namespace: stage
 
   - name: guardian
     repo: dime-consultants/Guardian-Bank-UI
-    deployment_type: helm
+    deployment_type: k3s
     aliases:
       - guardian
       - dime-consultants/guardian
@@ -258,10 +258,9 @@ apps:
           tls:
             enabled: true
             secretName: guardian-prod-tls
-        helm:
+        k3s:
           namespace: prod
-          wait: false
-          self_heal_enabled: false
+          normalize_deployment_ports: true
       stage:
         domain: stage-guardian.dimeconsultants.africa
         nginx_managed: false
@@ -311,10 +310,9 @@ apps:
           tls:
             enabled: true
             secretName: guardian-stage-tls
-        helm:
+        k3s:
           namespace: stage
-          wait: false
-          self_heal_enabled: false
+          normalize_deployment_ports: true
 
 extra_domains:
   - domain: promtail.dimeconsultants.africa

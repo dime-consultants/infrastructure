@@ -1,0 +1,233 @@
+{% set k3s_app_config = deployment_app_env.k3s | default({}) %}
+{% set image_config = deployment_app_env.image | default({}) %}
+{% set service_config = deployment_app_env.service | default({}) %}
+{% set ingress_config = deployment_app_env.ingress | default({}) %}
+{% set ingress_tls_config = ingress_config.tls | default({}) %}
+{% set probes_config = deployment_app_env.probes | default({}) %}
+{% set tmp_volume_config = deployment_app_env.tmpVolume | default({
+  'enabled': true,
+  'mounts': [
+    {'name': 'tmp', 'mountPath': '/tmp'},
+    {'name': 'var-tmp', 'mountPath': '/var/tmp'},
+    {'name': 'cache', 'mountPath': '/home/app/.cache'},
+    {'name': 'node-cache', 'mountPath': '/home/node/.cache'}
+  ]
+}) %}
+{% set resource_name = k3s_app_resource_name %}
+{% set app_name = 'dime-app' %}
+{% set app_labels = {
+  'app.kubernetes.io/name': app_name,
+  'app.kubernetes.io/instance': k3s_app_release_name,
+  'app.kubernetes.io/managed-by': 'ansible'
+} %}
+{% set selector_labels = {
+  'app.kubernetes.io/name': app_name,
+  'app.kubernetes.io/instance': k3s_app_release_name
+} %}
+{% set env_config = deployment_app_env.env | default({}) %}
+{% set secret_env_config = deployment_app_env.secret_env | default({}) | combine(k3s_dynamic_secret_env | default({}), recursive=True) %}
+{% if env_config %}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ resource_name }}-env
+  namespace: {{ k3s_namespace }}
+  labels:
+{{ app_labels | to_nice_yaml(indent=2) | indent(4, true) }}
+data:
+{% for key, value in env_config | dictsort %}
+  {{ key }}: {{ value | to_json }}
+{% endfor %}
+---
+{% endif %}
+{% if secret_env_config %}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ resource_name }}-secret
+  namespace: {{ k3s_namespace }}
+  labels:
+{{ app_labels | to_nice_yaml(indent=2) | indent(4, true) }}
+type: Opaque
+stringData:
+{% for key, value in secret_env_config | dictsort %}
+  {{ key }}: {{ value | to_json }}
+{% endfor %}
+---
+{% endif %}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ resource_name }}
+  namespace: {{ k3s_namespace }}
+  labels:
+{{ app_labels | to_nice_yaml(indent=2) | indent(4, true) }}
+spec:
+  replicas: {{ deployment_app_env.replicas | default(k3s_app_config.replicas | default(2)) }}
+  selector:
+    matchLabels:
+{{ selector_labels | to_nice_yaml(indent=2) | indent(6, true) }}
+  template:
+    metadata:
+      labels:
+{{ selector_labels | to_nice_yaml(indent=2) | indent(8, true) }}
+{% if deployment_app_env.podAnnotations | default({}) %}
+      annotations:
+{{ deployment_app_env.podAnnotations | to_nice_yaml(indent=2) | indent(8, true) }}
+{% endif %}
+    spec:
+      securityContext:
+{{ deployment_app_env.podSecurityContext | default({
+  'runAsNonRoot': true,
+  'runAsUser': 1000,
+  'runAsGroup': 1000,
+  'fsGroup': 1000,
+  'seccompProfile': {'type': 'RuntimeDefault'}
+}) | to_nice_yaml(indent=2) | indent(8, true) }}
+{% if deployment_app_env.imagePullSecrets | default([]) %}
+      imagePullSecrets:
+{{ deployment_app_env.imagePullSecrets | to_nice_yaml(indent=2) | indent(8, true) }}
+{% endif %}
+      containers:
+        - name: {{ app_name }}
+          image: "{{ image_config.repository | default((k3s_image_tag | regex_replace(':[^:/]+$', ''))) }}:{{ image_config.tag | default(k3s_image_tag | regex_replace('^.+:', '')) }}"
+          imagePullPolicy: {{ image_config.pullPolicy | default('IfNotPresent') }}
+          securityContext:
+{{ deployment_app_env.securityContext | default({
+  'allowPrivilegeEscalation': false,
+  'capabilities': {'drop': ['ALL']},
+  'privileged': false,
+  'readOnlyRootFilesystem': true,
+  'runAsNonRoot': true
+}) | to_nice_yaml(indent=2) | indent(12, true) }}
+{% if deployment_app_env.command | default([]) %}
+          command:
+{{ deployment_app_env.command | to_nice_yaml(indent=2) | indent(12, true) }}
+{% endif %}
+{% if deployment_app_env.args | default([]) %}
+          args:
+{{ deployment_app_env.args | to_nice_yaml(indent=2) | indent(12, true) }}
+{% endif %}
+{% if service_config.enabled | default(true) | bool %}
+          ports:
+            - name: http
+              containerPort: {{ service_config.targetPort | default(deployment_app_env.container_port | default(8000)) }}
+              protocol: TCP
+{% endif %}
+{% if env_config or secret_env_config %}
+          envFrom:
+{% if env_config %}
+            - configMapRef:
+                name: {{ resource_name }}-env
+{% endif %}
+{% if secret_env_config %}
+            - secretRef:
+                name: {{ resource_name }}-secret
+{% endif %}
+{% endif %}
+{% if probes_config.enabled | default(true) | bool %}
+          readinessProbe:
+            httpGet:
+              path: {{ probes_config.path | default('/health') | to_json }}
+              port: http
+            initialDelaySeconds: {{ probes_config.initialDelaySeconds | default(10) }}
+            periodSeconds: {{ probes_config.periodSeconds | default(10) }}
+          livenessProbe:
+            httpGet:
+              path: {{ probes_config.path | default('/health') | to_json }}
+              port: http
+            initialDelaySeconds: {{ probes_config.initialDelaySeconds | default(10) }}
+            periodSeconds: {{ probes_config.periodSeconds | default(10) }}
+{% endif %}
+          resources:
+{{ deployment_app_env.resources | default({}) | to_nice_yaml(indent=2) | indent(12, true) }}
+{% if tmp_volume_config.enabled | default(false) | bool or deployment_app_env.volumeMounts | default([]) %}
+          volumeMounts:
+{% if tmp_volume_config.enabled | default(false) | bool %}
+{{ tmp_volume_config.mounts | default([]) | to_nice_yaml(indent=2) | indent(12, true) }}
+{% endif %}
+{% if deployment_app_env.volumeMounts | default([]) %}
+{{ deployment_app_env.volumeMounts | to_nice_yaml(indent=2) | indent(12, true) }}
+{% endif %}
+{% endif %}
+{% if deployment_app_env.nodeSelector | default({}) %}
+      nodeSelector:
+{{ deployment_app_env.nodeSelector | to_nice_yaml(indent=2) | indent(8, true) }}
+{% endif %}
+{% if deployment_app_env.affinity | default({}) %}
+      affinity:
+{{ deployment_app_env.affinity | to_nice_yaml(indent=2) | indent(8, true) }}
+{% endif %}
+{% if deployment_app_env.tolerations | default([]) %}
+      tolerations:
+{{ deployment_app_env.tolerations | to_nice_yaml(indent=2) | indent(8, true) }}
+{% endif %}
+{% if tmp_volume_config.enabled | default(false) | bool or deployment_app_env.volumes | default([]) %}
+      volumes:
+{% if tmp_volume_config.enabled | default(false) | bool %}
+{% for mount in tmp_volume_config.mounts | default([]) %}
+        - name: {{ mount.name }}
+          emptyDir: {}
+{% endfor %}
+{% endif %}
+{% if deployment_app_env.volumes | default([]) %}
+{{ deployment_app_env.volumes | to_nice_yaml(indent=2) | indent(8, true) }}
+{% endif %}
+{% endif %}
+{% if service_config.enabled | default(true) | bool %}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ resource_name }}
+  namespace: {{ k3s_namespace }}
+  labels:
+{{ app_labels | to_nice_yaml(indent=2) | indent(4, true) }}
+spec:
+  type: {{ service_config.type | default('ClusterIP') }}
+  ports:
+    - port: {{ service_config.port | default(80) }}
+      targetPort: http
+      protocol: TCP
+      name: http
+{% if service_config.nodePort is defined %}
+      nodePort: {{ service_config.nodePort }}
+{% endif %}
+  selector:
+{{ selector_labels | to_nice_yaml(indent=2) | indent(4, true) }}
+{% endif %}
+{% if ingress_config.enabled | default(deployment_app_env.domain is defined and ((deployment_app_env.nginx_managed | default(false)) == false)) | bool and service_config.enabled | default(true) | bool %}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ resource_name }}
+  namespace: {{ k3s_namespace }}
+  labels:
+{{ app_labels | to_nice_yaml(indent=2) | indent(4, true) }}
+{% if ingress_config.annotations | default({}) %}
+  annotations:
+{{ ingress_config.annotations | to_nice_yaml(indent=2) | indent(4, true) }}
+{% endif %}
+spec:
+  ingressClassName: {{ ingress_config.className | default('traefik') }}
+{% if ingress_tls_config.enabled | default(false) | bool %}
+  tls:
+    - hosts:
+        - {{ deployment_app_env.domain }}
+{% if ingress_tls_config.secretName | default('') %}
+      secretName: {{ ingress_tls_config.secretName }}
+{% endif %}
+{% endif %}
+  rules:
+    - host: {{ deployment_app_env.domain }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ resource_name }}
+                port:
+                  name: http
+{% endif %}
