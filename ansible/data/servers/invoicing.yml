@@ -47,7 +47,7 @@ k3s:
     resolver_name: letsencrypt
     storage: /data/acme.json
   cert_manager:
-    enabled: true
+    enabled: false
     install_manifest_url: https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
     cluster_issuer:
       enabled: true
@@ -278,12 +278,11 @@ apps:
           enabled: true
           className: traefik
           annotations:
-            cert-manager.io/cluster-issuer: letsencrypt-prod
             traefik.ingress.kubernetes.io/router.entrypoints: websecure
             traefik.ingress.kubernetes.io/router.tls: "true"
+            traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
           tls:
             enabled: true
-            secretName: guardian-prod-tls
         k3s:
           namespace: prod
           normalize_deployment_ports: true
@@ -331,12 +330,11 @@ apps:
           enabled: true
           className: traefik
           annotations:
-            cert-manager.io/cluster-issuer: letsencrypt-prod
             traefik.ingress.kubernetes.io/router.entrypoints: websecure
             traefik.ingress.kubernetes.io/router.tls: "true"
+            traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
           tls:
             enabled: true
-            secretName: guardian-stage-tls
         k3s:
           namespace: stage
           normalize_deployment_ports: true

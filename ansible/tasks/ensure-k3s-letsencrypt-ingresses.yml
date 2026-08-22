@@ -1,0 +1,95 @@
+---
+- name: Resolve Traefik ACME resolver
+  set_fact:
+    k3s_letsencrypt_resolver_name: "{{ k3s.traefik_acme.resolver_name | default('letsencrypt') }}"
+
+- name: Ensure all ingresses request Traefik Let's Encrypt certificates
+  shell: |
+    set -eu
+
+    KUBECTL="/usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}"
+
+    $KUBECTL get ingress --all-namespaces \
+      -o jsonpath='{range .items[*]}{.metadata.namespace}{" "}{.metadata.name}{"\n"}{end}' |
+    while read -r namespace ingress_name; do
+      [ -n "$namespace" ] || continue
+
+      $KUBECTL annotate ingress "$ingress_name" -n "$namespace" \
+        cert-manager.io/cluster-issuer- --overwrite >/dev/null 2>&1 || true
+      $KUBECTL annotate ingress "$ingress_name" -n "$namespace" \
+        traefik.ingress.kubernetes.io/router.entrypoints=websecure \
+        traefik.ingress.kubernetes.io/router.tls=true \
+        traefik.ingress.kubernetes.io/router.tls.certresolver={{ k3s_letsencrypt_resolver_name | quote }} \
+        --overwrite >/dev/null
+
+      for index in 0 1 2 3 4 5 6 7 8 9; do
+        $KUBECTL patch ingress "$ingress_name" -n "$namespace" --type=json \
+          -p="[{\"op\":\"remove\",\"path\":\"/spec/tls/${index}/secretName\"}]" >/dev/null 2>&1 || true
+      done
+    done
+  args:
+    executable: /bin/bash
+  register: k3s_letsencrypt_ingress_enforcement
+  changed_when: false
+  when:
+    - k3s.traefik_acme.enabled | default(false) | bool
+
+- name: Verify every ingress domain serves a trusted Let's Encrypt certificate
+  shell: |
+    set -eu
+
+    KUBECTL="/usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}"
+    failed=0
+
+    domains="$($KUBECTL get ingress --all-namespaces \
+      -o jsonpath='{range .items[*]}{range .spec.rules[*]}{.host}{"\n"}{end}{end}' |
+      sort -u)"
+
+    for domain in $domains; do
+      [ -n "$domain" ] || continue
+
+      cert="$(echo | openssl s_client \
+        -connect {{ k3s.traefik_acme.verify_connect_host | default(ansible_host | default(inventory_hostname)) }}:443 \
+        -servername "$domain" \
+        -verify_hostname "$domain" \
+        2>&1 |
+        openssl x509 -noout -subject -issuer -ext subjectAltName 2>&1)" || {
+          echo "FAILED $domain: could not read served certificate"
+          failed=1
+          continue
+        }
+
+      if echo "$cert" | grep -q 'TRAEFIK DEFAULT CERT'; then
+        echo "FAILED $domain: Traefik default certificate is still being served"
+        echo "$cert"
+        failed=1
+        continue
+      fi
+
+      if ! echo "$cert" | grep -q "$domain"; then
+        echo "FAILED $domain: certificate SAN does not contain the domain"
+        echo "$cert"
+        failed=1
+        continue
+      fi
+
+      if ! echo "$cert" | grep -qi "Let's Encrypt"; then
+        echo "FAILED $domain: certificate issuer is not Let's Encrypt"
+        echo "$cert"
+        failed=1
+        continue
+      fi
+
+      echo "OK $domain"
+    done
+
+    exit "$failed"
+  args:
+    executable: /bin/bash
+  register: k3s_letsencrypt_certificate_verification
+  changed_when: false
+  retries: "{{ k3s.traefik_acme.verify_retries | default(30) }}"
+  delay: "{{ k3s.traefik_acme.verify_delay_seconds | default(10) }}"
+  until: k3s_letsencrypt_certificate_verification.rc == 0
+  when:
+    - k3s.traefik_acme.enabled | default(false) | bool

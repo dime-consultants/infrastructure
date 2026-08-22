@@ -1,6 +1,7 @@
 name: Base Server Configuration
 
 on:
+  workflow_dispatch:
   push:
     branches: [master]
     paths:

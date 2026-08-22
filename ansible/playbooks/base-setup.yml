@@ -236,6 +236,13 @@
         - not (effective_nginx_enabled | bool)
         - k3s.external_routes_enabled | default(true) | bool
 
+    - name: Ensure all K3s ingresses use Let's Encrypt certificates
+      include_tasks: ../tasks/ensure-k3s-letsencrypt-ingresses.yml
+      when:
+        - k3s.enabled | default(false) | bool
+        - k3s.traefik_acme.enabled | default(false) | bool
+        - "'traefik' not in (k3s.disable | default([]))"
+
     - name: Stop and disable host Nginx when Kubernetes owns HTTP ports
       service:
         name: nginx

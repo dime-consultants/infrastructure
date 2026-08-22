@@ -140,11 +140,11 @@ metadata:
   name: portainer
   namespace: {{ namespace }}
   annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
 {% if cert_manager_enabled %}
     cert-manager.io/cluster-issuer: {{ cert_manager_issuer.name | default('letsencrypt-prod') }}
 {% else %}
-    traefik.ingress.kubernetes.io/router.entrypoints: websecure
-    traefik.ingress.kubernetes.io/router.tls: "true"
     traefik.ingress.kubernetes.io/router.tls.certresolver: {{ k3s.traefik_acme.resolver_name | default('letsencrypt') }}
 {% endif %}
 spec:
@@ -152,7 +152,9 @@ spec:
   tls:
     - hosts:
         - {{ domain }}
+{% if cert_manager_enabled %}
       secretName: {{ tls_secret }}
+{% endif %}
   rules:
     - host: {{ domain }}
       http:

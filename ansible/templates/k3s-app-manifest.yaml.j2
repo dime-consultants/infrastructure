@@ -89,6 +89,8 @@ metadata:
 {{ app_labels | to_nice_yaml(indent=2) | indent(4, true) }}
 spec:
   replicas: {{ replica_count }}
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
 {{ selector_labels | to_nice_yaml(indent=2) | indent(6, true) }}
