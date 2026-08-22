@@ -162,6 +162,13 @@ def deployment_env_values(server, app, env_options, env_name, shared_service_cat
 
     env_values = {}
 
+    for env_key, secret_name in (app_env.get("secret_names") or {}).items():
+        env_values[str(env_key)] = secret_value(
+            {str(env_key): secret_name},
+            str(env_key),
+            f"{app.get('name')}:{env_name}",
+        )
+
     if isinstance(port_env, str):
         if not app_port:
             fail(

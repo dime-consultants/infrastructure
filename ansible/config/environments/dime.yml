@@ -119,6 +119,8 @@ apps:
     port_env: API_PORT
     postgres_database: invoicing
     rabbitmq_namespace: invoicing
+    secret_names:
+      SECRET_KEY: DJANGO_SECRET_KEY
     remove_deploy_artifacts:
       - /root/tools/ai_invoicing/image.tar
     compose_pull: missing
@@ -131,6 +133,10 @@ apps:
         nginx_managed: false
         port: 9455
         container_port: 9455
+        env:
+          DEBUG: "False"
+          DJANGO_SETTINGS_MODULE: config.settings
+          SYSTEM_BASE_URL: invoicing.dimeconsultants.africa
         service:
           type: ClusterIP
           port: 80
@@ -154,6 +160,10 @@ apps:
         nginx_managed: false
         port: 6001
         container_port: 6001
+        env:
+          DEBUG: "False"
+          DJANGO_SETTINGS_MODULE: config.settings
+          SYSTEM_BASE_URL: stage-invoicing.dimeconsultants.africa
         service:
           type: ClusterIP
           port: 80
@@ -256,7 +266,9 @@ apps:
         env:
           HOME: /home/node
           COREPACK_HOME: /home/node/.cache/node/corepack
+          NODE_ENV: production
           NEXT_TELEMETRY_DISABLED: "1"
+          PORT: "3000"
         tmpVolume:
           enabled: false
         volumeMounts:
@@ -308,7 +320,9 @@ apps:
         env:
           HOME: /home/node
           COREPACK_HOME: /home/node/.cache/node/corepack
+          NODE_ENV: production
           NEXT_TELEMETRY_DISABLED: "1"
+          PORT: "3000"
         tmpVolume:
           enabled: false
         volumeMounts:

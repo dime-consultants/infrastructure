@@ -89,6 +89,7 @@ jobs:
           RABBITMQ_PROD_PASSWORD: ${{ secrets.RABBITMQ_PROD_PASSWORD }}
           RABBITMQ_STAGE_USER: ${{ secrets.RABBITMQ_STAGE_USER }}
           RABBITMQ_STAGE_PASSWORD: ${{ secrets.RABBITMQ_STAGE_PASSWORD }}
+          DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
           TARGET_PUBLIC_IP: ${{ secrets[format('{0}', matrix.public_ip_secret_name)] }}
         run: |
           python3 ansible/scripts/deployment_resolver.py env \
@@ -125,6 +126,7 @@ jobs:
           RABBITMQ_PROD_PASSWORD: ${{ secrets.RABBITMQ_PROD_PASSWORD }}
           RABBITMQ_STAGE_USER: ${{ secrets.RABBITMQ_STAGE_USER }}
           RABBITMQ_STAGE_PASSWORD: ${{ secrets.RABBITMQ_STAGE_PASSWORD }}
+          DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
         run: |
 
           # Write key to a temp file
