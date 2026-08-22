@@ -1,0 +1,182 @@
+{% set portainer = k3s_portainer | default({}) %}
+{% set namespace = portainer.namespace | default('portainer') %}
+{% set domain = portainer.domain %}
+{% set tls_secret = portainer.tls_secret | default((domain ~ '-tls') | regex_replace('[^A-Za-z0-9-]', '-') | lower) %}
+{% set cert_manager_config = k3s.cert_manager | default({}) %}
+{% set cert_manager_issuer = cert_manager_config.cluster_issuer | default({}) %}
+{% set cert_manager_enabled = cert_manager_config.enabled | default(false) | bool and cert_manager_issuer.enabled | default(true) | bool %}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ namespace }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: portainer-sa-clusteradmin
+  namespace: {{ namespace }}
+  labels:
+    app.kubernetes.io/name: portainer
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: portainer
+  namespace: {{ namespace }}
+  labels:
+    app.kubernetes.io/name: portainer
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ portainer.storage_size | default('10Gi') }}
+{% if portainer.storage_class is defined %}
+  storageClassName: {{ portainer.storage_class }}
+{% endif %}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: portainer
+  labels:
+    app.kubernetes.io/name: portainer
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    namespace: {{ namespace }}
+    name: portainer-sa-clusteradmin
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: portainer
+  namespace: {{ namespace }}
+  labels:
+    app.kubernetes.io/name: portainer
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: portainer
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: portainer
+    spec:
+      serviceAccountName: portainer-sa-clusteradmin
+      containers:
+        - name: portainer
+          image: {{ portainer.image | default('portainer/portainer-ce:2.39.0') }}
+          imagePullPolicy: IfNotPresent
+          args:
+            - --tunnel-port=30776
+          ports:
+            - name: http
+              containerPort: 9000
+              protocol: TCP
+            - name: https
+              containerPort: 9443
+              protocol: TCP
+            - name: tcp-edge
+              containerPort: 8000
+              protocol: TCP
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 40
+            periodSeconds: 20
+          resources:
+{{ portainer.resources | default({}) | to_nice_yaml(indent=2) | indent(12, true) }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: portainer
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: portainer
+  namespace: {{ namespace }}
+  labels:
+    app.kubernetes.io/name: portainer
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: portainer
+  ports:
+    - name: http
+      port: 9000
+      targetPort: http
+      protocol: TCP
+    - name: https
+      port: 9443
+      targetPort: https
+      protocol: TCP
+    - name: edge
+      port: 8000
+      targetPort: tcp-edge
+      protocol: TCP
+{% if domain %}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: portainer
+  namespace: {{ namespace }}
+  annotations:
+{% if cert_manager_enabled %}
+    cert-manager.io/cluster-issuer: {{ cert_manager_issuer.name | default('letsencrypt-prod') }}
+{% else %}
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/router.tls.certresolver: {{ k3s.traefik_acme.resolver_name | default('letsencrypt') }}
+{% endif %}
+spec:
+  ingressClassName: {{ portainer.ingress_class | default('traefik') }}
+  tls:
+    - hosts:
+        - {{ domain }}
+      secretName: {{ tls_secret }}
+  rules:
+    - host: {{ domain }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: portainer
+                port:
+                  name: http
+{% if cert_manager_enabled %}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: portainer-tls
+  namespace: {{ namespace }}
+spec:
+  secretName: {{ tls_secret }}
+  dnsNames:
+    - {{ domain }}
+  issuerRef:
+    name: {{ cert_manager_issuer.name | default('letsencrypt-prod') }}
+    kind: ClusterIssuer
+{% endif %}
+{% endif %}

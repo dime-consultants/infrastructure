@@ -1,0 +1,140 @@
+---
+- name: Resolve K3s Argo CD facts
+  set_fact:
+    k3s_argocd_namespace: "{{ k3s_argocd.namespace | default('argocd') }}"
+    k3s_argocd_domain: "{{ k3s_argocd.domain }}"
+    k3s_argocd_install_manifest_url: "{{ k3s_argocd.install_manifest_url | default('https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml') }}"
+    k3s_argocd_ingress_manifest_file: /var/lib/rancher/k3s/server/manifests/argocd-ingress.yaml
+    k3s_argocd_external_release: "{{ ('external-' ~ k3s_argocd.domain) | regex_replace('[^A-Za-z0-9-]', '-') | lower | truncate(53, true, '') }}"
+
+- name: Remove old external Argo CD route release
+  command: >
+    /usr/local/bin/helm uninstall {{ k3s_argocd_external_release }}
+    --namespace external-routes
+    --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+  register: k3s_argocd_external_release_cleanup
+  changed_when: k3s_argocd_external_release_cleanup.rc == 0
+  failed_when: false
+  when: k3s_argocd.cleanup_external_route | default(true) | bool
+
+- name: Create Argo CD namespace
+  command: >
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    create namespace {{ k3s_argocd_namespace }}
+    --dry-run=client
+    -o yaml
+  register: k3s_argocd_namespace_manifest
+  changed_when: false
+
+- name: Apply Argo CD namespace
+  command: >
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    apply -f -
+  args:
+    stdin: "{{ k3s_argocd_namespace_manifest.stdout }}"
+  register: k3s_argocd_namespace_apply
+  changed_when: "'created' in k3s_argocd_namespace_apply.stdout or 'configured' in k3s_argocd_namespace_apply.stdout"
+
+- name: Install or update Argo CD
+  command: >
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    apply
+    -n {{ k3s_argocd_namespace }}
+    --server-side
+    --force-conflicts
+    -f {{ k3s_argocd_install_manifest_url }}
+  register: k3s_argocd_install
+  changed_when: "'created' in k3s_argocd_install.stdout or 'configured' in k3s_argocd_install.stdout or 'serverside-applied' in k3s_argocd_install.stdout"
+
+- name: Configure Argo CD server for ingress TLS termination
+  command: >
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    -n {{ k3s_argocd_namespace }}
+    patch configmap argocd-cmd-params-cm
+    --type merge
+    --patch '{"data":{"server.insecure":"true"}}'
+  register: k3s_argocd_insecure_patch
+  changed_when: "'patched' in k3s_argocd_insecure_patch.stdout"
+
+- name: Restart Argo CD server after ingress mode update
+  command: >
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    -n {{ k3s_argocd_namespace }}
+    rollout restart deployment/argocd-server
+  register: k3s_argocd_server_restart
+  changed_when: "'restarted' in k3s_argocd_server_restart.stdout"
+  when: k3s_argocd_insecure_patch.changed | default(false)
+
+- name: Render Argo CD ingress manifest
+  template:
+    src: ../templates/argocd-k3s-ingress.yaml.j2
+    dest: "{{ k3s_argocd_ingress_manifest_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Apply Argo CD ingress manifest
+  command: >
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    apply -f {{ k3s_argocd_ingress_manifest_file }}
+  register: k3s_argocd_ingress_apply
+  changed_when: "'created' in k3s_argocd_ingress_apply.stdout or 'configured' in k3s_argocd_ingress_apply.stdout"
+
+- name: Wait for Argo CD server rollout
+  command: >
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    -n {{ k3s_argocd_namespace }}
+    rollout status deployment/argocd-server
+    --timeout={{ k3s_argocd.rollout_timeout | default('300s') }}
+  changed_when: false
+
+- name: Wait for Argo CD deployments
+  command: >
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    -n {{ k3s_argocd_namespace }}
+    wait deployment
+    --all
+    --for=condition=Available
+    --timeout={{ k3s_argocd.rollout_timeout | default('300s') }}
+  changed_when: false
+
+- name: Wait for Argo CD TLS certificate
+  command: >
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    -n {{ k3s_argocd_namespace }}
+    wait certificate argocd-server-tls
+    --for=condition=Ready
+    --timeout={{ k3s_argocd.certificate_ready_timeout | default('180s') }}
+  register: k3s_argocd_certificate_wait
+  changed_when: false
+  failed_when: false
+  when:
+    - k3s.cert_manager.enabled | default(false) | bool
+    - k3s.cert_manager.cluster_issuer.enabled | default(true) | bool
+    - k3s_argocd_domain | default('') | length > 0
+
+- name: Show Argo CD certificate status when not ready
+  command: >
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    -n {{ k3s_argocd_namespace }}
+    describe certificate argocd-server-tls
+  register: k3s_argocd_certificate_status
+  changed_when: false
+  failed_when: false
+  when:
+    - k3s_argocd_certificate_wait is defined
+    - k3s_argocd_certificate_wait.rc | default(0) != 0
+
+- name: Fail when Argo CD TLS certificate is not ready
+  fail:
+    msg: |
+      TLS certificate for {{ k3s_argocd_domain }} did not become Ready.
+
+      kubectl wait:
+      {{ k3s_argocd_certificate_wait.stderr | default(k3s_argocd_certificate_wait.stdout | default('unavailable')) }}
+
+      Certificate status:
+      {{ k3s_argocd_certificate_status.stdout | default(k3s_argocd_certificate_status.stderr | default('unavailable')) }}
+  when:
+    - k3s_argocd_certificate_wait is defined
+    - k3s_argocd_certificate_wait.rc | default(0) != 0

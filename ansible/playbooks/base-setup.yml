@@ -208,6 +208,24 @@
       include_tasks: ../tasks/reconcile-k3s-app-replicas.yml
       when: k3s.enabled | default(false) | bool
 
+    - name: Deploy K3s Portainer dashboard
+      include_tasks: ../tasks/deploy-k3s-portainer.yml
+      when:
+        - k3s.enabled | default(false) | bool
+        - k3s_portainer.enabled | default(false) | bool
+
+    - name: Deploy K3s Grafana dashboard
+      include_tasks: ../tasks/deploy-k3s-grafana.yml
+      when:
+        - k3s.enabled | default(false) | bool
+        - k3s_grafana.enabled | default(false) | bool
+
+    - name: Deploy K3s Argo CD
+      include_tasks: ../tasks/deploy-k3s-argocd.yml
+      when:
+        - k3s.enabled | default(false) | bool
+        - k3s_argocd.enabled | default(false) | bool
+
     - name: Deploy K3s external routes for host-port services
       include_tasks: ../tasks/deploy-k3s-external-routes.yml
       vars:

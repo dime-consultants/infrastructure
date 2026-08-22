@@ -1,0 +1,93 @@
+---
+- name: Resolve K3s Grafana facts
+  set_fact:
+    k3s_grafana_namespace: "{{ k3s_grafana.namespace | default('grafana') }}"
+    k3s_grafana_domain: "{{ k3s_grafana.domain }}"
+    k3s_grafana_manifest_file: /var/lib/rancher/k3s/server/manifests/grafana.yaml
+    k3s_grafana_external_release: "{{ ('external-' ~ k3s_grafana.domain) | regex_replace('[^A-Za-z0-9-]', '-') | lower | truncate(53, true, '') }}"
+    grafana_admin_user: "{{ lookup('env', k3s_grafana.admin_user_secret_name | default('GRAFANA_PROD_USER')) }}"
+    grafana_admin_password: "{{ lookup('env', k3s_grafana.admin_password_secret_name | default('GRAFANA_PROD_PASSWORD')) }}"
+
+- name: Validate Grafana admin credentials
+  assert:
+    that:
+      - grafana_admin_user | length > 0
+      - grafana_admin_password | length > 0
+    fail_msg: >-
+      Grafana requires admin credentials in GitHub Secrets:
+      {{ k3s_grafana.admin_user_secret_name | default('GRAFANA_PROD_USER') }} and
+      {{ k3s_grafana.admin_password_secret_name | default('GRAFANA_PROD_PASSWORD') }}.
+
+- name: Remove old external Grafana route release
+  command: >
+    /usr/local/bin/helm uninstall {{ k3s_grafana_external_release }}
+    --namespace external-routes
+    --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+  register: k3s_grafana_external_release_cleanup
+  changed_when: k3s_grafana_external_release_cleanup.rc == 0
+  failed_when: false
+  when: k3s_grafana.cleanup_external_route | default(true) | bool
+
+- name: Render K3s Grafana manifest
+  template:
+    src: ../templates/grafana-k3s-manifest.yaml.j2
+    dest: "{{ k3s_grafana_manifest_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Apply K3s Grafana manifest
+  command: >
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    apply -f {{ k3s_grafana_manifest_file }}
+  register: k3s_grafana_apply
+  changed_when: "'created' in k3s_grafana_apply.stdout or 'configured' in k3s_grafana_apply.stdout"
+
+- name: Wait for Grafana rollout
+  command: >
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    -n {{ k3s_grafana_namespace }}
+    rollout status deployment/grafana
+    --timeout={{ k3s_grafana.rollout_timeout | default('180s') }}
+  changed_when: false
+
+- name: Wait for Grafana TLS certificate
+  command: >
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    -n {{ k3s_grafana_namespace }}
+    wait certificate grafana-tls
+    --for=condition=Ready
+    --timeout={{ k3s_grafana.certificate_ready_timeout | default('180s') }}
+  register: k3s_grafana_certificate_wait
+  changed_when: false
+  failed_when: false
+  when:
+    - k3s.cert_manager.enabled | default(false) | bool
+    - k3s.cert_manager.cluster_issuer.enabled | default(true) | bool
+    - k3s_grafana_domain | default('') | length > 0
+
+- name: Show Grafana certificate status when not ready
+  command: >
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    -n {{ k3s_grafana_namespace }}
+    describe certificate grafana-tls
+  register: k3s_grafana_certificate_status
+  changed_when: false
+  failed_when: false
+  when:
+    - k3s_grafana_certificate_wait is defined
+    - k3s_grafana_certificate_wait.rc | default(0) != 0
+
+- name: Fail when Grafana TLS certificate is not ready
+  fail:
+    msg: |
+      TLS certificate for {{ k3s_grafana_domain }} did not become Ready.
+
+      kubectl wait:
+      {{ k3s_grafana_certificate_wait.stderr | default(k3s_grafana_certificate_wait.stdout | default('unavailable')) }}
+
+      Certificate status:
+      {{ k3s_grafana_certificate_status.stdout | default(k3s_grafana_certificate_status.stderr | default('unavailable')) }}
+  when:
+    - k3s_grafana_certificate_wait is defined
+    - k3s_grafana_certificate_wait.rc | default(0) != 0

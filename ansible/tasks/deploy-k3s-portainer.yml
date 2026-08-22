@@ -1,0 +1,81 @@
+---
+- name: Resolve K3s Portainer facts
+  set_fact:
+    k3s_portainer_namespace: "{{ k3s_portainer.namespace | default('portainer') }}"
+    k3s_portainer_domain: "{{ k3s_portainer.domain }}"
+    k3s_portainer_manifest_file: /var/lib/rancher/k3s/server/manifests/portainer.yaml
+    k3s_portainer_external_release: "{{ ('external-' ~ k3s_portainer.domain) | regex_replace('[^A-Za-z0-9-]', '-') | lower | truncate(53, true, '') }}"
+
+- name: Remove old external Portainer route release
+  command: >
+    /usr/local/bin/helm uninstall {{ k3s_portainer_external_release }}
+    --namespace external-routes
+    --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+  register: k3s_portainer_external_release_cleanup
+  changed_when: k3s_portainer_external_release_cleanup.rc == 0
+  failed_when: false
+  when: k3s_portainer.cleanup_external_route | default(true) | bool
+
+- name: Render K3s Portainer manifest
+  template:
+    src: ../templates/portainer-k3s-manifest.yaml.j2
+    dest: "{{ k3s_portainer_manifest_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Apply K3s Portainer manifest
+  command: >
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    apply -f {{ k3s_portainer_manifest_file }}
+  register: k3s_portainer_apply
+  changed_when: "'created' in k3s_portainer_apply.stdout or 'configured' in k3s_portainer_apply.stdout"
+
+- name: Wait for Portainer rollout
+  command: >
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    -n {{ k3s_portainer_namespace }}
+    rollout status deployment/portainer
+    --timeout={{ k3s_portainer.rollout_timeout | default('180s') }}
+  changed_when: false
+
+- name: Wait for Portainer TLS certificate
+  command: >
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    -n {{ k3s_portainer_namespace }}
+    wait certificate portainer-tls
+    --for=condition=Ready
+    --timeout={{ k3s_portainer.certificate_ready_timeout | default('180s') }}
+  register: k3s_portainer_certificate_wait
+  changed_when: false
+  failed_when: false
+  when:
+    - k3s.cert_manager.enabled | default(false) | bool
+    - k3s.cert_manager.cluster_issuer.enabled | default(true) | bool
+    - k3s_portainer_domain | default('') | length > 0
+
+- name: Show Portainer certificate status when not ready
+  command: >
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    -n {{ k3s_portainer_namespace }}
+    describe certificate portainer-tls
+  register: k3s_portainer_certificate_status
+  changed_when: false
+  failed_when: false
+  when:
+    - k3s_portainer_certificate_wait is defined
+    - k3s_portainer_certificate_wait.rc | default(0) != 0
+
+- name: Fail when Portainer TLS certificate is not ready
+  fail:
+    msg: |
+      TLS certificate for {{ k3s_portainer_domain }} did not become Ready.
+
+      kubectl wait:
+      {{ k3s_portainer_certificate_wait.stderr | default(k3s_portainer_certificate_wait.stdout | default('unavailable')) }}
+
+      Certificate status:
+      {{ k3s_portainer_certificate_status.stdout | default(k3s_portainer_certificate_status.stderr | default('unavailable')) }}
+  when:
+    - k3s_portainer_certificate_wait is defined
+    - k3s_portainer_certificate_wait.rc | default(0) != 0

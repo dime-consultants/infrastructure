@@ -1,0 +1,52 @@
+{% set argocd = k3s_argocd | default({}) %}
+{% set namespace = argocd.namespace | default('argocd') %}
+{% set domain = argocd.domain %}
+{% set tls_secret = argocd.tls_secret | default((domain ~ '-tls') | regex_replace('[^A-Za-z0-9-]', '-') | lower) %}
+{% set cert_manager_config = k3s.cert_manager | default({}) %}
+{% set cert_manager_issuer = cert_manager_config.cluster_issuer | default({}) %}
+{% set cert_manager_enabled = cert_manager_config.enabled | default(false) | bool and cert_manager_issuer.enabled | default(true) | bool %}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argocd-server
+  namespace: {{ namespace }}
+  annotations:
+{% if cert_manager_enabled %}
+    cert-manager.io/cluster-issuer: {{ cert_manager_issuer.name | default('letsencrypt-prod') }}
+{% else %}
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/router.tls.certresolver: {{ k3s.traefik_acme.resolver_name | default('letsencrypt') }}
+{% endif %}
+spec:
+  ingressClassName: {{ argocd.ingress_class | default('traefik') }}
+  tls:
+    - hosts:
+        - {{ domain }}
+      secretName: {{ tls_secret }}
+  rules:
+    - host: {{ domain }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: argocd-server
+                port:
+                  name: http
+{% if cert_manager_enabled %}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: argocd-server-tls
+  namespace: {{ namespace }}
+spec:
+  secretName: {{ tls_secret }}
+  dnsNames:
+    - {{ domain }}
+  issuerRef:
+    name: {{ cert_manager_issuer.name | default('letsencrypt-prod') }}
+    kind: ClusterIssuer
+{% endif %}

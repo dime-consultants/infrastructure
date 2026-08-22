@@ -73,21 +73,34 @@ shared_services:
       prod: {}
       stage: {}
 
-  - name: portainer
-    environments:
-      prod:
-        domain: portainer.dimeconsultants.africa
-
-  - name: grafana
-    environments:
-      prod:
-        domain: grafana.dimeconsultants.africa
-
   - name: rabbitmq
     environments:
       prod:
         domain: rabbitmq.dimeconsultants.africa
       stage: {}
+
+k3s_portainer:
+  enabled: true
+  domain: portainer.dimeconsultants.africa
+  namespace: portainer
+  image: portainer/portainer-ce:2.39.0
+  storage_size: 10Gi
+
+k3s_argocd:
+  enabled: true
+  domain: argocd.dimeconsultants.africa
+  namespace: argocd
+  install_manifest_url: https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+
+k3s_grafana:
+  enabled: true
+  domain: grafana.dimeconsultants.africa
+  namespace: grafana
+  image: grafana/grafana-oss:11.1.4
+  storage_size: 10Gi
+  admin_user_secret_name: GRAFANA_PROD_USER
+  admin_password_secret_name: GRAFANA_PROD_PASSWORD
+
 apps:
   - name: invoicing
     repo: dime-consultants/ai_invoicing
@@ -332,10 +345,5 @@ extra_domains:
   - domain: promtail.dimeconsultants.africa
     proxy_port: 9080
     basic_auth: true
-
-  - domain: argocd.dimeconsultants.africa
-    proxy_port: 8080
-    preserve_authorization: true
-
 backups:
   enabled: false
