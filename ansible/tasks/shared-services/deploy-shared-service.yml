@@ -6,7 +6,7 @@
       - shared_service_env in shared_service_catalog[shared_service_name].environments
     fail_msg: >-
       Unknown shared service subscription {{ shared_service_name }}:{{ shared_service_env }}.
-      Check ansible/data/shared-services.yml.
+      Check ansible/config/shared-services/catalog.yml.
 
 - name: Resolve shared service config
   set_fact:
@@ -45,28 +45,28 @@
 
 - name: Copy Grafana Promtail config
   copy:
-    src: ../shared-services/grafana/promtail-config.yml
+    src: ../services/shared/grafana/promtail-config.yml
     dest: "{{ shared_service_project_dir }}/promtail-config.yml"
     mode: "0644"
   when: shared_service_name == 'grafana'
 
 - name: Copy Grafana Loki config
   copy:
-    src: ../shared-services/grafana/loki-config.yml
+    src: ../services/shared/grafana/loki-config.yml
     dest: "{{ shared_service_project_dir }}/loki-config.yml"
     mode: "0644"
   when: shared_service_name == 'grafana'
 
 - name: Copy Grafana Prometheus config
   copy:
-    src: ../shared-services/grafana/prometheus.yml
+    src: ../services/shared/grafana/prometheus.yml
     dest: "{{ shared_service_project_dir }}/prometheus.yml"
     mode: "0644"
   when: shared_service_name == 'grafana'
 
 - name: Copy Grafana provisioning files
   copy:
-    src: ../shared-services/grafana/provisioning/
+    src: ../services/shared/grafana/provisioning/
     dest: "{{ shared_service_project_dir }}/provisioning/"
     mode: "0644"
     directory_mode: "0755"
@@ -91,8 +91,8 @@
         env_files:
           - .env
         state: present
-        pull: always
-        recreate: auto
+        pull: "{{ shared_service_compose_pull | default('always') }}"
+        recreate: "{{ shared_service_compose_recreate | default('auto') }}"
         remove_orphans: true
   rescue:
     - name: Show shared service container status

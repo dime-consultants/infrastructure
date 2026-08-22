@@ -5,7 +5,7 @@
     app_rabbitmq_subscription: "{{ shared_services | default([]) | selectattr('name', 'equalto', 'rabbitmq') | first | default({}) }}"
 
 - name: Provision shared dependencies for app environments
-  include_tasks: provision-app-shared-dependencies-for-app.yml
+  include_tasks: provision-shared-dependencies-for-app.yml
   loop: "{{ apps | default([]) }}"
   loop_control:
     loop_var: shared_dependency_app

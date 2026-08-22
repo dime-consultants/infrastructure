@@ -36,7 +36,7 @@ Connection secrets:
 Shared service runtime secrets:
 
 These are the actual credentials consumed by the shared service containers.
-`ansible/data/shared-services.yml` stores the GitHub Secret names once, and
+`ansible/config/shared-services/catalog.yml` stores the GitHub Secret names once, and
 every server uses those same shared service credentials.
 
 Shared service secrets:

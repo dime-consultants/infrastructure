@@ -1,7 +1,7 @@
 # Shared Services
 
 Shared services are deployed independently from application stacks. Each server
-subscribes to the services it needs in `ansible/data/servers/<server>.yml`.
+subscribes to the services it needs in `ansible/config/environments/<server>.yml`.
 
 ```yaml
 shared_services:
@@ -11,9 +11,9 @@ shared_services:
       stage: {}
 ```
 
-The service catalog lives in `ansible/data/shared-services.yml`. Each service has
-one reusable Docker Compose file under `ansible/shared-services/<service>/` and
-is deployed once per environment into `/opt/shared-services/<service>/<env>`.
+The service catalog lives in `ansible/config/shared-services/catalog.yml`. Each service has
+one reusable Docker Compose file under `ansible/services/shared/<service>/` and
+is deployed once per environment into `/o../services/shared/<service>/<env>`.
 
 Base config reconciles these subscriptions. If a shared service environment is
 removed from a server file, the next base-config run stops that Compose project
@@ -33,7 +33,7 @@ shared_services:
       stage: {}
 ```
 
-If the default proxy port from `ansible/data/shared-services.yml` is not right
+If the default proxy port from `ansible/config/shared-services/catalog.yml` is not right
 for a domain, set `proxy_port` beside `domain`.
 
 RabbitMQ management domains should use RabbitMQ's own login only. Do not add
@@ -140,7 +140,7 @@ shared_service_catalog:
 
 The base configuration workflow exposes those GitHub Secrets as environment
 variables, and Ansible reads them while rendering each shared service `.env`
-file. The full checklist is in `ansible/data/github-secrets.md`.
+file. The full checklist is in `ansible/config/global/github-secrets.md`.
 
 Postgres database names are declared on the app environment so apps do not share
 the same database. They reuse the same Postgres user/password for the

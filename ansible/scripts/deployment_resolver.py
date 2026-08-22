@@ -93,7 +93,8 @@ def matching_deployments(servers, requested_app, env_name, target_server=None):
     matches = []
     for server in servers:
         server_name = server.get("server_name")
-        if target_server and server_name != target_server:
+        server_aliases = server.get("server_aliases") or []
+        if target_server and target_server not in [server_name, *server_aliases]:
             continue
         for app in server.get("apps", []) or []:
             if not app_matches(app, requested_app):
@@ -401,7 +402,7 @@ def build_parser():
     targets.add_argument("--app", required=True)
     targets.add_argument("--env", required=True)
     targets.add_argument("--server")
-    targets.add_argument("--servers-dir", default="ansible/data/servers")
+    targets.add_argument("--servers-dir", default="ansible/config/environments")
     targets.add_argument("--github-output", default=os.environ.get("GITHUB_OUTPUT"))
     targets.set_defaults(func=cmd_targets)
 
@@ -421,8 +422,8 @@ def build_parser():
     env.add_argument("--app", required=True)
     env.add_argument("--env", required=True)
     env.add_argument("--target-server", required=True)
-    env.add_argument("--servers-dir", default="ansible/data/servers")
-    env.add_argument("--shared-services", default="ansible/data/shared-services.yml")
+    env.add_argument("--servers-dir", default="ansible/config/environments")
+    env.add_argument("--shared-services", default="ansible/config/shared-services/catalog.yml")
     env.add_argument("--output", required=True)
     env.add_argument("--append", action="store_true")
     env.set_defaults(func=cmd_env)

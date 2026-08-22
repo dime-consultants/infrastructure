@@ -1,4 +1,10 @@
-server_name: invoicing
+environment_name: dime
+server_name: dime
+server_aliases:
+  - invoicing
+kubernetes_namespaces:
+  - prod
+  - stage
 
 ssh_secret_name: INVOICING_SSH_KEY
 ssh_user_secret_name: INVOICING_SSH_USER
@@ -21,7 +27,7 @@ nginx_enabled: false
 
 migration_cleanup:
   purge_nginx_when_k3s: true
-  stop_docker_when_k3s: true
+  stop_docker_when_k3s: false
   disable_docker_when_k3s: false
   uninstall_k3s_when_docker: false
   docker_prune_when_docker: false

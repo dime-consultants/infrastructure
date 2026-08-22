@@ -13,7 +13,7 @@
   when: (shared_dependency_app | combine(shared_dependency_app_env_item.value, recursive=True)).postgres_database is defined
 
 - name: Provision Postgres database for app environment
-  include_tasks: provision-postgres-database.yml
+  include_tasks: ../shared-services/provision-postgres-database.yml
   loop: "{{ shared_dependency_app.environments | default({}) | dict2items }}"
   loop_control:
     loop_var: shared_dependency_app_env_item
@@ -49,7 +49,7 @@
   when: (shared_dependency_app | combine(shared_dependency_app_env_item.value, recursive=True)).rabbitmq_namespace is defined
 
 - name: Provision RabbitMQ namespace for app environment
-  include_tasks: provision-rabbitmq-namespace.yml
+  include_tasks: ../shared-services/provision-rabbitmq-namespace.yml
   loop: "{{ shared_dependency_app.environments | default({}) | dict2items }}"
   loop_control:
     loop_var: shared_dependency_app_env_item

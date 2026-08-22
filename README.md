@@ -15,7 +15,7 @@ Postgres and RabbitMQ credentials.
 
 ## How Deployment Is Resolved
 
-Servers are defined in `ansible/data/servers/*.yml`. A repository dispatch with
+Deployment environments are defined in `ansible/config/environments/*.yml`. A repository dispatch with
 `app_repo` and `env` is matched against each server's `apps` list by:
 
 - `repo`
@@ -29,7 +29,7 @@ servers unless the dispatch payload includes `server` or `target_server`.
 
 ## Server Configuration
 
-Create one file per server under `ansible/data/servers/`.
+Create one file per deployment environment under `ansible/config/environments/`.
 
 ```yaml
 enabled: true

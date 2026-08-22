@@ -47,7 +47,7 @@
   register: direct_k3s_kubeconfig
 
 - name: Bootstrap K3s before direct deploy when enabled
-  include_tasks: "{{ playbook_dir }}/../tasks/install-k3s.yml"
+  include_tasks: "{{ playbook_dir }}/../tasks/kubernetes/install-k3s.yml"
   when:
     - k3s.enabled | default(false) | bool
     - not direct_k3s_binary.stat.exists or not direct_k3s_kubeconfig.stat.exists
@@ -86,14 +86,14 @@
     - k3s_app_options.configure_ingress_controller | default(not k3s_fast_deploy) | bool
 
 - name: Configure cert-manager before direct deploy
-  include_tasks: "{{ playbook_dir }}/../tasks/configure-cert-manager.yml"
+  include_tasks: "{{ playbook_dir }}/../tasks/kubernetes/configure-cert-manager.yml"
   when:
     - k3s is defined
     - k3s.cert_manager.enabled | default(false) | bool
     - k3s_app_options.configure_cert_manager | default(not k3s_fast_deploy) | bool
 
 - name: Configure and run K3s space guard before direct deploy
-  include_tasks: "{{ playbook_dir }}/../tasks/configure-k3s-space-guard.yml"
+  include_tasks: "{{ playbook_dir }}/../tasks/kubernetes/configure-k3s-space-guard.yml"
   when:
     - k3s is defined
     - k3s.space_guard.enabled | default(true) | bool

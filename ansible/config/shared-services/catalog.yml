@@ -1,6 +1,6 @@
 ---
 # Shared services are deployed as standalone Docker Compose projects.
-# Servers opt in with `shared_services` in ansible/data/servers/*.yml.
+# Servers opt in with `shared_services` in ansible/config/environments/*.yml.
 shared_service_base_dir: /opt/shared-services
 shared_service_environments:
   - prod
@@ -13,7 +13,7 @@ shared_service_networks:
 shared_service_catalog:
   postgres:
     description: PostgreSQL database server
-    compose_file: ../shared-services/postgres/docker-compose.yml
+    compose_file: ../services/shared/postgres/docker-compose.yml
     environments:
       prod:
         published_port: 5432
@@ -34,7 +34,7 @@ shared_service_catalog:
 
   rabbitmq:
     description: RabbitMQ broker with management UI
-    compose_file: ../shared-services/rabbitmq/docker-compose.yml
+    compose_file: ../services/shared/rabbitmq/docker-compose.yml
     environments:
       prod:
         amqp_port: 5672
@@ -57,7 +57,7 @@ shared_service_catalog:
 
   portainer:
     description: Docker management UI
-    compose_file: ../shared-services/portainer/docker-compose.yml
+    compose_file: ../services/shared/portainer/docker-compose.yml
     environments:
       prod:
         http_port: 9000
@@ -74,7 +74,7 @@ shared_service_catalog:
 
   grafana:
     description: Metrics and dashboard UI
-    compose_file: ../shared-services/grafana/docker-compose.yml
+    compose_file: ../services/shared/grafana/docker-compose.yml
     environments:
       prod:
         published_port: 3000
@@ -105,7 +105,7 @@ shared_service_catalog:
 
   flower:
     description: Celery task monitoring UI
-    compose_file: ../shared-services/flower/docker-compose.yml
+    compose_file: ../services/shared/flower/docker-compose.yml
     environments:
       prod:
         published_port: 5555

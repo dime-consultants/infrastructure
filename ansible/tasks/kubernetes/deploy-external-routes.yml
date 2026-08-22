@@ -49,7 +49,7 @@
     k3s_external_routes_resolved: "{{ k3s_external_routes_json | from_json }}"
 
 - name: Deploy K3s external routes
-  include_tasks: deploy-k3s-external-route.yml
+  include_tasks: deploy-external-route.yml
   loop: "{{ k3s_external_routes_resolved }}"
   loop_control:
     loop_var: route

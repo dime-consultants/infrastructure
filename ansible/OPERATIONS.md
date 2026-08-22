@@ -21,7 +21,7 @@ deployed to every enabled server that declares that app and environment.
 
 ## Adding A Server
 
-Create `ansible/data/servers/<server>.yml` with:
+Create `ansible/config/environments/<server>.yml` with:
 
 - `server_name`
 - SSH, user, and public IP secret names
@@ -149,7 +149,7 @@ Nginx is stopped/disabled by base setup. If a K3s server must keep host Nginx,
 set `nginx_enabled: true` and disable Traefik.
 
 Apps can deploy through the reusable Helm chart at
-`ansible/helm/dime-app`:
+`ansible/charts/application`:
 
 ```yaml
 apps:

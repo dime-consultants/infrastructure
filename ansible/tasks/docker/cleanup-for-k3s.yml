@@ -16,7 +16,19 @@
   register: docker_stop_all
   changed_when: docker_stop_all.stdout | length > 0
   failed_when: docker_stop_all.rc != 0
-  when: migration_cleanup.stop_docker_when_k3s | default(false) | bool
+  when:
+    - migration_cleanup.stop_docker_when_k3s | default(false) | bool
+    - shared_services | default([]) | length == 0
+
+- name: Refuse to stop Docker containers while shared services are configured
+  debug:
+    msg: >-
+      Skipping Docker container stop because this K3s host still has shared_services configured.
+      Stopping Docker would take down shared dependencies such as Postgres or RabbitMQ and make
+      Kubernetes apps lose ready backends.
+  when:
+    - migration_cleanup.stop_docker_when_k3s | default(false) | bool
+    - shared_services | default([]) | length > 0
 
 - name: Disable Docker service after stopping containers
   service:

@@ -19,7 +19,7 @@ on:
         required: true
         type: string
       server:
-        description: 'Target server name (must match server_name in ansible/data/servers/*.yml)'
+        description: 'Target environment name (for example: dime)'
         required: true
         type: string
 
@@ -32,13 +32,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build static matrix with custom SSH secret names
+      - name: Build environment matrix with custom SSH secret names
         id: build
         run: |
           python3 << 'PY'
           import yaml, json, os
 
-          servers_dir = "ansible/data/servers"
+          servers_dir = "ansible/config/environments"
           matrix_entries = []
 
           for filename in os.listdir(servers_dir):
@@ -61,7 +61,8 @@ jobs:
                           })
 
           matrix_json = json.dumps({"include": matrix_entries})
-          print(f"::set-output name=matrix::{matrix_json}")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+              fh.write(f"matrix={matrix_json}\n")
           PY
 
   rollback:

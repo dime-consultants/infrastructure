@@ -54,7 +54,7 @@
 
 - name: Copy external route Helm chart to target host
   copy:
-    src: "{{ playbook_dir }}/../helm/external-route/"
+    src: "{{ playbook_dir }}/../charts/external-route/"
     dest: "{{ external_route_chart_remote_path }}/"
     mode: preserve
 

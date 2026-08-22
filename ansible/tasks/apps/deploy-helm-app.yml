@@ -61,7 +61,7 @@
 - name: Bootstrap K3s and Helm before app deploy when missing
   block:
     - name: Install or repair K3s and Helm
-      include_tasks: "{{ playbook_dir }}/../tasks/install-k3s.yml"
+      include_tasks: "{{ playbook_dir }}/../tasks/kubernetes/install-k3s.yml"
   rescue:
     - name: Report non-fatal K3s/Helm bootstrap failure
       debug:
@@ -114,7 +114,7 @@
     - (k3s.traefik_acme | default({})).enabled | default(false) | bool
 
 - name: Configure cert-manager before Helm app deploy
-  include_tasks: "{{ playbook_dir }}/../tasks/configure-cert-manager.yml"
+  include_tasks: "{{ playbook_dir }}/../tasks/kubernetes/configure-cert-manager.yml"
   when:
     - helm_k3s_binary.stat.exists
     - helm_k3s_kubeconfig.stat.exists

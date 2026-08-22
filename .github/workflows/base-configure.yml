@@ -6,12 +6,12 @@ on:
     branches: [master]
     paths:
       - ".github/workflows/base-configure.yml"
-      - "ansible/data/**"
+      - "ansible/config/**"
       - "ansible/inventory/**"
       - "ansible/playbooks/base-setup.yml"
       - "ansible/playbooks/deploy-shared-services.yml"
-      - "ansible/helm/**"
-      - "ansible/shared-services/**"
+      - "ansible/charts/**"
+      - "ansible/services/shared/**"
       - "ansible/tasks/**"
       - "ansible/templates/**"
 
@@ -25,7 +25,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build static matrix with custom SSH secret names
+      - name: Build environment matrix with custom SSH secret names
         id: build
         run: |
           python3 << 'PY'
@@ -33,7 +33,7 @@ jobs:
           import json
           import os
 
-          servers_dir = "ansible/data/servers"
+          servers_dir = "ansible/config/environments"
           matrix_entries = []
 
           for filename in os.listdir(servers_dir):

@@ -4,8 +4,8 @@
   become: yes
   gather_facts: false
   vars_files:
-    - ../data/common.yml
-    - ../data/shared-services.yml
+    - ../config/global/common.yml
+    - ../config/shared-services/catalog.yml
   vars:
     requested_app_identifiers:
       - "{{ app_repo | default('') | lower }}"
@@ -60,7 +60,7 @@
       when: deployment_runtime == 'compose'
 
     - name: Pre-deploy Docker maintenance and disk check
-      include_tasks: ../tasks/configure-docker-maintenance.yml
+      include_tasks: ../tasks/docker/configure-docker-maintenance.yml
       vars:
         docker_maintenance_configure_daemon: false
       when: >-
@@ -84,6 +84,20 @@
           - env in shared_service_catalog.rabbitmq.environments
         fail_msg: "Shared service catalog has no rabbitmq:{{ env }} config required by {{ deployment_app.name }}."
       when: deployment_app_env.rabbitmq_namespace is defined
+
+    - name: Ensure required shared dependencies are running
+      include_tasks: ../tasks/apps/provision-shared-dependencies-for-app.yml
+      vars:
+        shared_dependency_app: "{{ deployment_app }}"
+        shared_dependency_app_env_item:
+          key: "{{ env }}"
+          value: "{{ deployment_app.environments[env] }}"
+        app_postgres_subscription: "{{ shared_services | default([]) | selectattr('name', 'equalto', 'postgres') | first | default({}) }}"
+        app_rabbitmq_subscription: "{{ shared_services | default([]) | selectattr('name', 'equalto', 'rabbitmq') | first | default({}) }}"
+        shared_service_compose_pull: missing
+        shared_service_compose_recreate: auto
+      when:
+        - deployment_app_env.postgres_database is defined or deployment_app_env.rabbitmq_namespace is defined
 
     - name: Create application directory
       file:
@@ -165,15 +179,15 @@
       when: deployment_runtime == 'compose'
 
     - name: Deploy with Helm on K3s
-      include_tasks: ../tasks/deploy-helm-app.yml
+      include_tasks: ../tasks/apps/deploy-helm-app.yml
       when: deployment_runtime == 'helm'
 
     - name: Deploy directly on K3s
-      include_tasks: ../tasks/deploy-k3s-app.yml
+      include_tasks: ../tasks/apps/deploy-direct-k3s-app.yml
       when: deployment_runtime == 'k3s'
 
     - name: Post-deploy Docker maintenance and disk check
-      include_tasks: ../tasks/configure-docker-maintenance.yml
+      include_tasks: ../tasks/docker/configure-docker-maintenance.yml
       vars:
         docker_maintenance_configure_daemon: false
       when:

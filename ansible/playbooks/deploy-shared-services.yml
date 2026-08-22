@@ -4,11 +4,11 @@
   become: yes
 
   vars_files:
-    - ../data/shared-services.yml
+    - ../config/shared-services/catalog.yml
 
   tasks:
     - name: Deploy subscribed shared services
-      include_tasks: ../tasks/deploy-shared-service-subscription.yml
+      include_tasks: ../tasks/shared-services/deploy-shared-service-subscription.yml
       loop: "{{ shared_services | default([]) }}"
       loop_control:
         loop_var: shared_service_subscription_item
@@ -17,4 +17,4 @@
         shared_service_subscription: "{{ shared_service_subscription_item }}"
 
     - name: Stop unsubscribed shared services
-      include_tasks: ../tasks/cleanup-unsubscribed-shared-services.yml
+      include_tasks: ../tasks/shared-services/cleanup-unsubscribed-shared-services.yml

@@ -5,8 +5,8 @@
   gather_facts: false
 
   vars_files:
-    - ../data/common.yml
-    - ../data/shared-services.yml
+    - ../config/global/common.yml
+    - ../config/shared-services/catalog.yml
 
   pre_tasks:
     - name: Wait for SSH to become reachable
@@ -179,7 +179,7 @@
       when: docker_setup_enabled | default(true) | bool
 
     - name: Configure Docker maintenance and reclaim disk space
-      include_tasks: ../tasks/configure-docker-maintenance.yml
+      include_tasks: ../tasks/docker/configure-docker-maintenance.yml
       when: docker_setup_enabled | default(true) | bool
 
     - name: Add current user to docker group
@@ -201,33 +201,33 @@
       when: effective_nginx_enabled | bool
 
     - name: Install and configure K3s
-      include_tasks: ../tasks/install-k3s.yml
+      include_tasks: ../tasks/kubernetes/install-k3s.yml
       when: k3s.enabled | default(false) | bool
 
     - name: Reconcile configured K3s app replica counts
-      include_tasks: ../tasks/reconcile-k3s-app-replicas.yml
+      include_tasks: ../tasks/kubernetes/reconcile-app-replicas.yml
       when: k3s.enabled | default(false) | bool
 
     - name: Deploy K3s Portainer dashboard
-      include_tasks: ../tasks/deploy-k3s-portainer.yml
+      include_tasks: ../tasks/kubernetes/deploy-portainer.yml
       when:
         - k3s.enabled | default(false) | bool
         - k3s_portainer.enabled | default(false) | bool
 
     - name: Deploy K3s Grafana dashboard
-      include_tasks: ../tasks/deploy-k3s-grafana.yml
+      include_tasks: ../tasks/kubernetes/deploy-grafana.yml
       when:
         - k3s.enabled | default(false) | bool
         - k3s_grafana.enabled | default(false) | bool
 
     - name: Deploy K3s Argo CD
-      include_tasks: ../tasks/deploy-k3s-argocd.yml
+      include_tasks: ../tasks/kubernetes/deploy-argocd.yml
       when:
         - k3s.enabled | default(false) | bool
         - k3s_argocd.enabled | default(false) | bool
 
     - name: Deploy K3s external routes for host-port services
-      include_tasks: ../tasks/deploy-k3s-external-routes.yml
+      include_tasks: ../tasks/kubernetes/deploy-external-routes.yml
       vars:
         extra_domains: "{{ hostvars[inventory_hostname].extra_domains | default([]) }}"
         shared_services: "{{ hostvars[inventory_hostname].shared_services | default([]) }}"
@@ -237,7 +237,7 @@
         - k3s.external_routes_enabled | default(true) | bool
 
     - name: Ensure all K3s ingresses use Let's Encrypt certificates
-      include_tasks: ../tasks/ensure-k3s-letsencrypt-ingresses.yml
+      include_tasks: ../tasks/kubernetes/ensure-letsencrypt-ingresses.yml
       when:
         - k3s.enabled | default(false) | bool
         - k3s.traefik_acme.enabled | default(false) | bool
@@ -288,7 +288,7 @@
         - "'traefik' not in (k3s.disable | default([]))"
 
     - name: Cleanup Nginx and Docker runtime after K3s is ready
-      include_tasks: ../tasks/cleanup-for-k3s.yml
+      include_tasks: ../tasks/docker/cleanup-for-k3s.yml
       when:
         - k3s.enabled | default(false) | bool
         - not (effective_nginx_enabled | bool)
@@ -298,7 +298,7 @@
           migration_cleanup.disable_docker_when_k3s | default(false) | bool
 
     - name: Cleanup K3s and Docker artifacts when switching back to Docker
-      include_tasks: ../tasks/cleanup-for-docker.yml
+      include_tasks: ../tasks/docker/cleanup-for-docker.yml
       when:
         - not (k3s.enabled | default(false) | bool)
         - effective_nginx_enabled | bool
@@ -309,10 +309,10 @@
           migration_cleanup.docker_prune_volumes_when_docker | default(false) | bool
 
     - name: Configure security baseline
-      include_tasks: ../tasks/configure-security.yml
+      include_tasks: ../tasks/security/configure-security.yml
 
     - name: Deploy subscribed shared services
-      include_tasks: ../tasks/deploy-shared-service-subscription.yml
+      include_tasks: ../tasks/shared-services/deploy-shared-service-subscription.yml
       loop: "{{ shared_services | default([]) }}"
       loop_control:
         loop_var: shared_service_subscription_item
@@ -322,11 +322,11 @@
       when: shared_services_deploy_enabled | default(true) | bool
 
     - name: Stop unsubscribed shared services
-      include_tasks: ../tasks/cleanup-unsubscribed-shared-services.yml
+      include_tasks: ../tasks/shared-services/cleanup-unsubscribed-shared-services.yml
       when: shared_services_deploy_enabled | default(true) | bool
 
     - name: Configure backups
-      include_tasks: ../tasks/configure-backups.yml
+      include_tasks: ../tasks/backups/configure-backups.yml
 
     - name: Enable and configure UFW
       ufw:
@@ -421,7 +421,7 @@
         - basic_auth_domains | length > 0
 
     - name: Generate Nginx sites for all apps and environments
-      include_tasks: ../tasks/generate-nginx.yml
+      include_tasks: ../tasks/nginx/generate-nginx.yml
       vars:
         apps: "{{ hostvars[inventory_hostname].apps | default([]) }}"
         extra_domains: "{{ hostvars[inventory_hostname].extra_domains | default([]) }}"
