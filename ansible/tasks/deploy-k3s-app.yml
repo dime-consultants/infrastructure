@@ -10,6 +10,7 @@
     k3s_app_options: "{{ deployment_app_env.k3s | default({}) }}"
     image_options: "{{ deployment_app_env.image | default({}) }}"
     k3s_dynamic_secret_env: {}
+    k3s_fast_deploy: "{{ deployment_app_env.fast_deploy | default(true) | bool }}"
 
 - name: Load generated environment file for K3s
   set_fact:
@@ -45,11 +46,31 @@
     path: "{{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}"
   register: direct_k3s_kubeconfig
 
-- name: Bootstrap K3s before direct deploy when missing
+- name: Bootstrap K3s before direct deploy when enabled
   include_tasks: "{{ playbook_dir }}/../tasks/install-k3s.yml"
   when:
     - k3s.enabled | default(false) | bool
     - not direct_k3s_binary.stat.exists or not direct_k3s_kubeconfig.stat.exists
+    - k3s_app_options.bootstrap_enabled | default(not k3s_fast_deploy) | bool
+
+- name: Re-check K3s binary after optional direct deploy bootstrap
+  stat:
+    path: /usr/local/bin/k3s
+  register: direct_k3s_binary
+
+- name: Re-check K3s kubeconfig after optional direct deploy bootstrap
+  stat:
+    path: "{{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}"
+  register: direct_k3s_kubeconfig
+
+- name: Validate K3s runtime before direct deploy
+  assert:
+    that:
+      - direct_k3s_binary.stat.exists
+      - direct_k3s_kubeconfig.stat.exists
+    fail_msg: >-
+      K3s is not ready on {{ inventory_hostname }}. Run base configuration first,
+      or set k3s.bootstrap_enabled=true for this app environment.
 
 - name: Configure Traefik ACME certificates before direct deploy
   template:
@@ -62,18 +83,21 @@
     - k3s is defined
     - "'traefik' not in (k3s.disable | default([]))"
     - (k3s.traefik_acme | default({})).enabled | default(false) | bool
+    - k3s_app_options.configure_ingress_controller | default(not k3s_fast_deploy) | bool
 
 - name: Configure cert-manager before direct deploy
   include_tasks: "{{ playbook_dir }}/../tasks/configure-cert-manager.yml"
   when:
     - k3s is defined
     - k3s.cert_manager.enabled | default(false) | bool
+    - k3s_app_options.configure_cert_manager | default(not k3s_fast_deploy) | bool
 
 - name: Configure and run K3s space guard before direct deploy
   include_tasks: "{{ playbook_dir }}/../tasks/configure-k3s-space-guard.yml"
   when:
     - k3s is defined
     - k3s.space_guard.enabled | default(true) | bool
+    - k3s_app_options.run_space_guard | default(not k3s_fast_deploy) | bool
 
 - name: Create or update Kubernetes namespace for direct deploy
   command: >

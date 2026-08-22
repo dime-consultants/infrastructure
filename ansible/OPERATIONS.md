@@ -180,9 +180,26 @@ K3s includes Traefik by default when it is not listed under `k3s.disable`.
 Traefik handles ingress routing and Kubernetes Services load balance across
 healthy pods.
 
-App deploys can bootstrap K3s and Helm directly if base setup has not prepared
-the server yet. Helm deploy failures are non-fatal by default after diagnostics
-and retry/self-heal attempts; set `helm.fail_on_error: true` for strict release
+Direct K3s app deploys use the fast path by default. Base configuration owns
+cluster setup, ingress controller configuration, cert-manager installation, and
+space guard maintenance; normal direct K3s app deploys only render and apply the
+application manifest. For repair or first-boot direct K3s app deploys, opt back
+into setup work per environment:
+
+```yaml
+k3s:
+  bootstrap_enabled: true
+  configure_ingress_controller: true
+  configure_cert_manager: true
+  run_space_guard: true
+```
+
+Application Deployments are intentionally constrained to one replica. The
+rendered direct K3s manifests, Helm values, and base replica reconciliation all
+clamp Kubernetes app workloads to `replicas: 1`.
+
+Helm deploy failures are non-fatal by default after diagnostics and
+retry/self-heal attempts; set `helm.fail_on_error: true` for strict release
 gates.
 
 ```yaml

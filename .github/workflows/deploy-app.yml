@@ -7,58 +7,17 @@ on:
     types: [deploy-app]
 
 jobs:
-  generate-matrix:
+  resolve-targets:
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.build.outputs.matrix }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Build static matrix with custom SSH secret names
-        id: build
-        run: |
-          python3 << 'PY'
-          import yaml, json, os
-
-          servers_dir = "ansible/data/servers"
-          matrix_entries = []
-
-          for filename in os.listdir(servers_dir):
-              if filename.endswith(".yml"):
-                  path = os.path.join(servers_dir, filename)
-                  with open(path) as f:
-                      data = yaml.safe_load(f) or {}
-                      if data.get("enabled") is False:
-                          continue
-                      server_name = data.get("server_name")
-                      ssh_secret = data.get("ssh_secret_name")
-                      public_ip_secret = data.get("public_ip_secret_name")
-                      ssh_user_secret = data.get("ssh_user_secret_name")
-                      if server_name and ssh_secret and public_ip_secret and ssh_user_secret:
-                          matrix_entries.append({
-                              "server": server_name,
-                              "secret_name": ssh_secret,
-                              "public_ip_secret_name": public_ip_secret,
-                              "ssh_user_secret_name": ssh_user_secret
-                          })
-
-          matrix_json = json.dumps({"include": matrix_entries})
-          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
-              output.write(f"matrix={matrix_json}\n")
-          PY
-
-  prepare:
-    needs: generate-matrix
-    runs-on: ubuntu-latest
-    outputs:
+      matrix: ${{ steps.targets.outputs.matrix }}
       servers: ${{ steps.targets.outputs.servers }}
       servers_json: ${{ steps.targets.outputs.servers_json }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-    
-      - name: Find target servers for this app
+
+      - name: Build target deploy matrix
         id: targets
         env:
           TARGET_SERVER: ${{ github.event.client_payload.target_server || github.event.client_payload.server }}
@@ -70,40 +29,43 @@ jobs:
             
   deploy:
     name: Deploy ${{ github.event.client_payload.app_repo }} ${{ github.event.client_payload.env }} to ${{ matrix.server }}
-    needs: [ generate-matrix, prepare ]
-    if: needs.prepare.outputs.servers != ''
+    needs: resolve-targets
+    if: needs.resolve-targets.outputs.servers != ''
     runs-on: ubuntu-latest
     concurrency:
       group: server-${{ matrix.server }}
       cancel-in-progress: false
     strategy:
-      matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
+      matrix: ${{ fromJson(needs.resolve-targets.outputs.matrix) }}
       fail-fast: false
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup tools
-        if: ${{ contains(fromJson(needs.prepare.outputs.servers_json), matrix.server) }}
         uses: actions/setup-python@v4
         with:
           python-version: '3.12'
           cache: 'pip'
           cache-dependency-path: .github/requirements/deploy.txt
 
+      - name: Cache Ansible collections
+        uses: actions/cache@v4
+        with:
+          path: ~/.ansible/collections
+          key: ansible-collections-${{ runner.os }}-${{ hashFiles('.github/requirements/deploy.txt') }}
+
       - name: Install dependencies
-        if: ${{ contains(fromJson(needs.prepare.outputs.servers_json), matrix.server) }}
         run: |
           pip install -r .github/requirements/deploy.txt
           ansible-galaxy collection install 'community.docker:>3.0.0'
 
       - name: Decode docker-compose.yml
-        if: ${{ contains(fromJson(needs.prepare.outputs.servers_json), matrix.server) && github.event.client_payload.docker_compose_b64 != null && github.event.client_payload.docker_compose_b64 != '' }}
+        if: ${{ github.event.client_payload.docker_compose_b64 != null && github.event.client_payload.docker_compose_b64 != '' }}
         run: |
           echo "${{ github.event.client_payload.docker_compose_b64 }}" | base64 -d > /tmp/docker-compose-raw.yml
 
       - name: Create .env file
-        if: ${{ contains(fromJson(needs.prepare.outputs.servers_json), matrix.server) }}
         env:
           IMAGE_TAG: ${{ github.event.client_payload.image_tag }}
           SHARED_ENV: ${{ github.event.client_payload.env }}
@@ -118,7 +80,6 @@ jobs:
             --output /tmp/.env
 
       - name: Append app environment metadata
-        if: ${{ contains(fromJson(needs.prepare.outputs.servers_json), matrix.server) }}
         env:
           POSTGRES_PROD_USER: ${{ secrets.POSTGRES_PROD_USER }}
           POSTGRES_PROD_PASSWORD: ${{ secrets.POSTGRES_PROD_PASSWORD }}
@@ -138,12 +99,11 @@ jobs:
             --append
 
       - name: Render final docker-compose
-        if: ${{ contains(fromJson(needs.prepare.outputs.servers_json), matrix.server) && github.event.client_payload.docker_compose_b64 != null && github.event.client_payload.docker_compose_b64 != '' }}
+        if: ${{ github.event.client_payload.docker_compose_b64 != null && github.event.client_payload.docker_compose_b64 != '' }}
         run: |
           docker compose -f /tmp/docker-compose-raw.yml --env-file /tmp/.env config > /tmp/docker-compose.yml
 
-      - name: Deploy only if this matrix server is in the target list
-        if: ${{ contains(fromJson(needs.prepare.outputs.servers_json), matrix.server) }}
+      - name: Deploy app
         env:
           ANSIBLE_HOST_KEY_CHECKING: False
           ANSIBLE_TIMEOUT: "15"
@@ -172,30 +132,6 @@ jobs:
           trap 'rm -f "$KEY_FILE"' EXIT
           chmod 600 "$KEY_FILE"
           printf '%s\n' "$SSH_PRIVATE_KEY" > "$KEY_FILE"
-
-          echo "Checking SSH reachability for $TARGET_SERVER"
-          ssh_ok=false
-          for attempt in 1 2 3; do
-            if ssh \
-              -i "$KEY_FILE" \
-              -o StrictHostKeyChecking=no \
-              -o UserKnownHostsFile=/dev/null \
-              -o LogLevel=ERROR \
-              -o ConnectTimeout=10 \
-              -o ConnectionAttempts=1 \
-              -o BatchMode=yes \
-              "$TARGET_SSH_USER@$TARGET_PUBLIC_IP" true; then
-              ssh_ok=true
-              break
-            fi
-            echo "SSH check failed for $TARGET_SERVER on attempt $attempt/3"
-            sleep 5
-          done
-
-          if [ "$ssh_ok" != "true" ]; then
-            echo "SSH is not reachable for $TARGET_SERVER after 3 short attempts; aborting before Ansible."
-            exit 1
-          fi
 
           app_name=$(basename "${{ github.event.client_payload.app_repo }}")
           env="${{ github.event.client_payload.env }}"

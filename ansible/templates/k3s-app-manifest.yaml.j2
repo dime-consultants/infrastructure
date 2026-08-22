@@ -1,6 +1,7 @@
 {% set k3s_app_config = deployment_app_env.k3s | default({}) %}
 {% set image_config = deployment_app_env.image | default({}) %}
 {% set service_config = deployment_app_env.service | default({}) %}
+{% set replica_count = [[deployment_app_env.replicas | default(k3s_app_config.replicas | default(1)) | int, 1] | min, 1] | max %}
 {% set ingress_config = deployment_app_env.ingress | default({}) %}
 {% set ingress_tls_config = ingress_config.tls | default({}) %}
 {% set cert_manager_config = k3s.cert_manager | default({}) %}
@@ -87,7 +88,7 @@ metadata:
   labels:
 {{ app_labels | to_nice_yaml(indent=2) | indent(4, true) }}
 spec:
-  replicas: {{ deployment_app_env.replicas | default(k3s_app_config.replicas | default(1)) }}
+  replicas: {{ replica_count }}
   selector:
     matchLabels:
 {{ selector_labels | to_nice_yaml(indent=2) | indent(6, true) }}

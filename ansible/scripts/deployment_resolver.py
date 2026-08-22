@@ -314,18 +314,43 @@ def cmd_targets(args):
         fail(f"No deployment targets found for {args.app}:{args.env}")
 
     target_servers = []
+    matrix_entries = []
     for match in matches:
-        server_name = match["server"].get("server_name")
+        server = match["server"]
+        server_name = server.get("server_name")
         if server_name not in target_servers:
+            required_secret_fields = (
+                "ssh_secret_name",
+                "public_ip_secret_name",
+                "ssh_user_secret_name",
+            )
+            missing_secret_fields = [
+                field for field in required_secret_fields if not server.get(field)
+            ]
+            if missing_secret_fields:
+                fail(
+                    f"Server {server_name} is missing required deploy fields: "
+                    f"{', '.join(missing_secret_fields)}"
+                )
             target_servers.append(server_name)
+            matrix_entries.append(
+                {
+                    "server": server_name,
+                    "secret_name": server.get("ssh_secret_name"),
+                    "public_ip_secret_name": server.get("public_ip_secret_name"),
+                    "ssh_user_secret_name": server.get("ssh_user_secret_name"),
+                }
+            )
 
     servers_csv = ",".join(target_servers)
+    matrix_json = json.dumps({"include": matrix_entries})
     print(servers_csv)
     write_github_output(
         args.github_output,
         {
             "servers": servers_csv,
             "servers_json": json.dumps(target_servers),
+            "matrix": matrix_json,
         },
     )
 

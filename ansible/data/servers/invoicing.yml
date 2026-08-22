@@ -130,6 +130,7 @@ apps:
           namespace: prod
       stage:
         domain: stage-invoicing.dimeconsultants.africa
+        replicas: 1
         nginx_managed: false
         port: 6001
         container_port: 6001
@@ -169,6 +170,7 @@ apps:
     environments:
       prod:
         domain: hr.dimeconsultants.africa
+        replicas: 1
         nginx_managed: false
         port: 8023
         container_port: 8023
@@ -189,6 +191,7 @@ apps:
           namespace: prod
       stage:
         domain: stage-hr.dimeconsultants.africa
+        replicas: 1
         nginx_managed: false
         port: 7734
         container_port: 7734
@@ -273,7 +276,7 @@ apps:
           normalize_deployment_ports: true
       stage:
         domain: stage-guardian.dimeconsultants.africa
-        replicas: 0
+        replicas: 1
         nginx_managed: false
         port: 3000
         container_port: 3000

@@ -8,7 +8,7 @@
       {%- for env_name, env_options in app.environments.items() -%}
       {%- set merged_env = app | combine(env_options | default({}), recursive=True) -%}
       {%- set runtime = merged_env.deployment_type | default(merged_env.runtime | default('compose')) -%}
-      {%- if runtime in ['helm', 'k3s'] and env_options.replicas is defined -%}
+      {%- if runtime in ['helm', 'k3s'] -%}
       {%- set k3s_options = env_options.k3s | default(env_options.helm | default({})) -%}
       {%- set release_name = k3s_options.release_name | default((app.name ~ '-' ~ env_name) | regex_replace('[^A-Za-z0-9-]', '-')) -%}
       {%- set resource_name = k3s_options.resource_name | default((release_name ~ '-dime-app') | regex_replace('[^A-Za-z0-9-]', '-')) -%}
@@ -17,7 +17,7 @@
         'env': env_name,
         'namespace': k3s_options.namespace | default(env_name),
         'deployment': resource_name,
-        'replicas': env_options.replicas
+        'replicas': 1
       }) -%}
       {%- endif -%}
       {%- endfor -%}

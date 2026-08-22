@@ -76,6 +76,19 @@ k3s:
     - traefik
 ```
 
+Direct K3s app deployments use a fast path by default: normal app deploys expect
+base configuration to have already installed K3s, cert-manager, and Traefik
+settings. For repair or first-boot direct K3s app deploys, opt back into setup
+work per environment:
+
+```yaml
+k3s:
+  bootstrap_enabled: true
+  configure_ingress_controller: true
+  configure_cert_manager: true
+  run_space_guard: true
+```
+
 ## SSL Certificates
 
 Host Nginx mode uses certbot with the webroot challenge. Base setup renders
