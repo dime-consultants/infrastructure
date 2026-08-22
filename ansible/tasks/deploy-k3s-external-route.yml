@@ -5,6 +5,30 @@
     external_route_namespace: "{{ route.namespace | default('external-routes') }}"
     external_route_values_file: "/tmp/external-route-{{ route.domain | regex_replace('[^A-Za-z0-9-]', '-') }}.yml"
     external_route_chart_remote_path: "/tmp/external-route-chart"
+    external_route_backend_host_raw: "{{ route.backend_host }}"
+
+- name: Resolve external route backend hostname to IPv4
+  shell: |
+    set -eu
+    getent ahostsv4 {{ external_route_backend_host_raw | quote }} | awk 'NR == 1 { print $1 }'
+  register: external_route_backend_lookup
+  changed_when: false
+  when: not (external_route_backend_host_raw is match('^([0-9]{1,3}\.){3}[0-9]{1,3}$'))
+
+- name: Set external route backend IP
+  set_fact:
+    external_route_backend_host: >-
+      {{
+        external_route_backend_host_raw
+        if (external_route_backend_host_raw is match('^([0-9]{1,3}\.){3}[0-9]{1,3}$'))
+        else (external_route_backend_lookup.stdout_lines | default([]) | first | default(''))
+      }}
+
+- name: Validate external route backend IP
+  assert:
+    that:
+      - external_route_backend_host is match('^([0-9]{1,3}\.){3}[0-9]{1,3}$')
+    fail_msg: "External route {{ route.domain }} backend {{ external_route_backend_host_raw }} did not resolve to an IPv4 address."
 
 - name: Create external route namespace
   shell: |

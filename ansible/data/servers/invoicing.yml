@@ -107,6 +107,7 @@ apps:
     environments:
       prod:
         domain: invoicing.dimeconsultants.africa
+        replicas: 1
         nginx_managed: false
         port: 9455
         container_port: 9455
@@ -219,6 +220,7 @@ apps:
     environments:
       prod:
         domain: guardian.dimeconsultants.africa
+        replicas: 1
         nginx_managed: false
         port: 3000
         container_port: 3000
@@ -271,6 +273,7 @@ apps:
           normalize_deployment_ports: true
       stage:
         domain: stage-guardian.dimeconsultants.africa
+        replicas: 0
         nginx_managed: false
         port: 3000
         container_port: 3000

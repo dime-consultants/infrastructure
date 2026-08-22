@@ -32,7 +32,7 @@ ingress:
     enabled: {{ route_tls_enabled | ternary('true', 'false') }}
     secretName: {{ route_tls_secret_name | to_json }}
 backend:
-  host: {{ route.backend_host | to_json }}
+  host: {{ external_route_backend_host | default(route.backend_host) | to_json }}
   port: {{ route.backend_port }}
 service:
   port: {{ route.service_port | default(80) }}

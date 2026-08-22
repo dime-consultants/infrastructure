@@ -1,0 +1,55 @@
+---
+- name: Gather configured K3s app replica targets
+  set_fact:
+    k3s_app_replica_targets_json: >-
+      {%- set targets = [] -%}
+      {%- for app in apps | default([]) -%}
+      {%- if app.environments is mapping -%}
+      {%- for env_name, env_options in app.environments.items() -%}
+      {%- set merged_env = app | combine(env_options | default({}), recursive=True) -%}
+      {%- set runtime = merged_env.deployment_type | default(merged_env.runtime | default('compose')) -%}
+      {%- if runtime in ['helm', 'k3s'] and env_options.replicas is defined -%}
+      {%- set k3s_options = env_options.k3s | default(env_options.helm | default({})) -%}
+      {%- set release_name = k3s_options.release_name | default((app.name ~ '-' ~ env_name) | regex_replace('[^A-Za-z0-9-]', '-')) -%}
+      {%- set resource_name = k3s_options.resource_name | default((release_name ~ '-dime-app') | regex_replace('[^A-Za-z0-9-]', '-')) -%}
+      {%- set _ = targets.append({
+        'app': app.name,
+        'env': env_name,
+        'namespace': k3s_options.namespace | default(env_name),
+        'deployment': resource_name,
+        'replicas': env_options.replicas
+      }) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ targets | to_json }}
+
+- name: Parse configured K3s app replica targets
+  set_fact:
+    k3s_app_replica_targets: "{{ k3s_app_replica_targets_json | from_json }}"
+
+- name: Check configured K3s deployments for replica reconciliation
+  command: >
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    -n {{ item.namespace }}
+    get deployment {{ item.deployment }}
+  register: k3s_replica_deployment_checks
+  changed_when: false
+  failed_when: false
+  loop: "{{ k3s_app_replica_targets }}"
+  loop_control:
+    label: "{{ item.namespace }}/{{ item.deployment }}"
+
+- name: Reconcile configured K3s app replicas
+  command: >
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    -n {{ item.item.namespace }}
+    scale deployment {{ item.item.deployment }}
+    --replicas={{ item.item.replicas }}
+  register: k3s_replica_scale_results
+  changed_when: "'scaled' in k3s_replica_scale_results.stdout"
+  loop: "{{ k3s_replica_deployment_checks.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.namespace }}/{{ item.item.deployment }}={{ item.item.replicas }}"
+  when: item.rc == 0

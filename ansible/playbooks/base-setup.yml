@@ -204,6 +204,10 @@
       include_tasks: ../tasks/install-k3s.yml
       when: k3s.enabled | default(false) | bool
 
+    - name: Reconcile configured K3s app replica counts
+      include_tasks: ../tasks/reconcile-k3s-app-replicas.yml
+      when: k3s.enabled | default(false) | bool
+
     - name: Deploy K3s external routes for host-port services
       include_tasks: ../tasks/deploy-k3s-external-routes.yml
       vars:
