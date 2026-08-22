@@ -1,7 +1,7 @@
 {% set helm_config = deployment_app_env.helm | default({}) %}
 {% set image_config = deployment_app_env.image | default({}) %}
 {% set service_config = deployment_app_env.service | default({}) %}
-{% set replica_count = [[deployment_app_env.replicas | default(helm_config.replicas | default(1)) | int, 1] | min, 1] | max %}
+{% set replica_count = [deployment_app_env.replicas | default(helm_config.replicas | default(2)) | int, 1] | max %}
 {% set ingress_config = deployment_app_env.ingress | default({}) %}
 {% set ingress_tls_config = ingress_config.tls | default({}) %}
 {% set cert_manager_config = k3s.cert_manager | default({}) %}
@@ -31,6 +31,12 @@
 {% set autoscaling_config = deployment_app_env.autoscaling | default({}) %}
 {% set probes_config = deployment_app_env.probes | default({}) %}
 replicaCount: {{ replica_count }}
+
+strategy:
+  maxUnavailable: {{ deployment_app_env.maxUnavailable | default(helm_config.maxUnavailable | default(0)) }}
+  maxSurge: {{ deployment_app_env.maxSurge | default(helm_config.maxSurge | default(1)) }}
+
+minReadySeconds: {{ deployment_app_env.minReadySeconds | default(helm_config.minReadySeconds | default(5)) }}
 
 image:
   repository: {{ image_config.repository | default((helm_image_tag | regex_replace(':[^:/]+$', ''))) | to_json }}
@@ -113,8 +119,8 @@ resources:
 
 autoscaling:
   enabled: {{ autoscaling_config.enabled | default(false) | bool | ternary('true', 'false') }}
-  minReplicas: {{ [[autoscaling_config.minReplicas | default(1) | int, 1] | min, 1] | max }}
-  maxReplicas: {{ [[autoscaling_config.maxReplicas | default(1) | int, 1] | min, 1] | max }}
+  minReplicas: {{ [autoscaling_config.minReplicas | default(replica_count) | int, 1] | max }}
+  maxReplicas: {{ [autoscaling_config.maxReplicas | default(replica_count) | int, 1] | max }}
   targetCPUUtilizationPercentage: {{ autoscaling_config.targetCPUUtilizationPercentage | default(70) }}
 
 probes:

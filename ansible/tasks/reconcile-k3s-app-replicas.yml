@@ -17,7 +17,7 @@
         'env': env_name,
         'namespace': k3s_options.namespace | default(env_name),
         'deployment': resource_name,
-        'replicas': 1
+        'replicas': env_options.replicas | default(k3s_options.replicas | default(2)) | int
       }) -%}
       {%- endif -%}
       {%- endfor -%}

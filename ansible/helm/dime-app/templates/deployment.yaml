@@ -9,7 +9,11 @@ spec:
   replicas: {{ .Values.replicaCount }}
   {{- end }}
   strategy:
-    type: Recreate
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: {{ .Values.strategy.maxUnavailable | default 0 }}
+      maxSurge: {{ .Values.strategy.maxSurge | default 1 }}
+  minReadySeconds: {{ .Values.minReadySeconds | default 5 }}
   selector:
     matchLabels:
       {{- include "dime-app.selectorLabels" . | nindent 6 }}

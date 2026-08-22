@@ -5,8 +5,8 @@
     k3s_grafana_domain: "{{ k3s_grafana.domain }}"
     k3s_grafana_manifest_file: /var/lib/rancher/k3s/server/manifests/grafana.yaml
     k3s_grafana_external_release: "{{ ('external-' ~ k3s_grafana.domain) | regex_replace('[^A-Za-z0-9-]', '-') | lower | truncate(53, true, '') }}"
-    grafana_admin_user: "{{ lookup('env', k3s_grafana.admin_user_secret_name | default('GRAFANA_PROD_USER')) }}"
-    grafana_admin_password: "{{ lookup('env', k3s_grafana.admin_password_secret_name | default('GRAFANA_PROD_PASSWORD')) }}"
+    grafana_admin_user: "{{ k3s_grafana.admin_user | default(lookup('env', k3s_grafana.admin_user_secret_name | default('GRAFANA_PROD_USER'))) }}"
+    grafana_admin_password: "{{ k3s_grafana.admin_password | default(lookup('env', k3s_grafana.admin_password_secret_name | default('GRAFANA_PROD_PASSWORD'))) }}"
 
 - name: Validate Grafana admin credentials
   assert:
@@ -50,6 +50,21 @@
     rollout status deployment/grafana
     --timeout={{ k3s_grafana.rollout_timeout | default('180s') }}
   changed_when: false
+
+- name: Reset Grafana admin password in existing database
+  shell: |
+    set -eu
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }} \
+      -n {{ k3s_grafana_namespace | quote }} \
+      exec deployment/grafana -- \
+      grafana cli admin reset-admin-password "${GRAFANA_ADMIN_PASSWORD}"
+  args:
+    executable: /bin/bash
+  environment:
+    GRAFANA_ADMIN_PASSWORD: "{{ grafana_admin_password }}"
+  changed_when: true
+  no_log: true
+  when: k3s_grafana.reset_admin_password | default(true) | bool
 
 - name: Wait for Grafana TLS certificate
   command: >

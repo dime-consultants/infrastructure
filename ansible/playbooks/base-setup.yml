@@ -248,11 +248,12 @@
         name: nginx
         state: stopped
         enabled: false
+      register: nginx_disable_result
       when:
         - not (effective_nginx_enabled | bool)
         - "'nginx.service' in ansible_facts.services"
 
-    - name: Restart Traefik service load balancer pods after releasing HTTP ports
+    - name: Restart Traefik service load balancer pods after Nginx state changed
       command: >
         /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
         -n kube-system delete pod
@@ -263,6 +264,8 @@
         - k3s.enabled | default(false) | bool
         - not (effective_nginx_enabled | bool)
         - "'traefik' not in (k3s.disable | default([]))"
+        - nginx_disable_result is defined
+        - nginx_disable_result.changed | default(false)
 
     - name: Wait for K3s ingress HTTP port after Nginx is disabled
       wait_for:

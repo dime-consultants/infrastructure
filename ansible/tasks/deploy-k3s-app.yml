@@ -147,3 +147,11 @@
 - name: Report direct K3s apply output
   debug:
     msg: "{{ direct_k3s_apply.stdout_lines }}"
+
+- name: Wait for direct K3s app rollout
+  command: >
+    /usr/local/bin/k3s kubectl --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+    -n {{ k3s_namespace }}
+    rollout status deployment/{{ k3s_app_resource_name }}
+    --timeout={{ k3s_app_options.rollout_timeout | default('300s') }}
+  changed_when: false

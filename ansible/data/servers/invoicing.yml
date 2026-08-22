@@ -99,8 +99,8 @@ k3s_grafana:
   namespace: grafana
   image: grafana/grafana-oss:11.1.4
   storage_size: 10Gi
-  admin_user_secret_name: GRAFANA_PROD_USER
-  admin_password_secret_name: GRAFANA_PROD_PASSWORD
+  admin_user: admin
+  admin_password: "Nqvtg9XoMPhWGq4oLPt6NWjHks6C["
 
 apps:
   - name: invoicing
@@ -121,7 +121,7 @@ apps:
     environments:
       prod:
         domain: invoicing.dimeconsultants.africa
-        replicas: 1
+        replicas: 2
         nginx_managed: false
         port: 9455
         container_port: 9455
@@ -144,7 +144,7 @@ apps:
           namespace: prod
       stage:
         domain: stage-invoicing.dimeconsultants.africa
-        replicas: 1
+        replicas: 2
         nginx_managed: false
         port: 6001
         container_port: 6001
@@ -184,7 +184,7 @@ apps:
     environments:
       prod:
         domain: hr.dimeconsultants.africa
-        replicas: 1
+        replicas: 2
         nginx_managed: false
         port: 8023
         container_port: 8023
@@ -205,7 +205,7 @@ apps:
           namespace: prod
       stage:
         domain: stage-hr.dimeconsultants.africa
-        replicas: 1
+        replicas: 2
         nginx_managed: false
         port: 7734
         container_port: 7734
@@ -237,7 +237,7 @@ apps:
     environments:
       prod:
         domain: guardian.dimeconsultants.africa
-        replicas: 1
+        replicas: 2
         nginx_managed: false
         port: 3000
         container_port: 3000
@@ -289,7 +289,7 @@ apps:
           normalize_deployment_ports: true
       stage:
         domain: stage-guardian.dimeconsultants.africa
-        replicas: 1
+        replicas: 2
         nginx_managed: false
         port: 3000
         container_port: 3000

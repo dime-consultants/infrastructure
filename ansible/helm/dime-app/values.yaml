@@ -1,5 +1,11 @@
 replicaCount: 1
 
+strategy:
+  maxUnavailable: 0
+  maxSurge: 1
+
+minReadySeconds: 5
+
 image:
   repository: nginx
   tag: latest
