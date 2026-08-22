@@ -28,11 +28,13 @@
     helm_release_name: "{{ helm_options.release_name | default((deployment_app.name ~ '-' ~ env) | regex_replace('[^A-Za-z0-9-]', '-')) }}"
     helm_namespace: "{{ helm_options.namespace | default(env) }}"
     helm_chart_src: "{{ helm_options.chart | default((playbook_dir | dirname) ~ '/helm/dime-app') }}"
-    helm_chart_deploy_path: "{{ app_dir }}/chart"
+    helm_chart_archive_local: "/tmp/{{ (deployment_app.name ~ '-' ~ env) | regex_replace('[^A-Za-z0-9-]', '-') }}-chart.tgz"
+    helm_chart_archive_remote: "{{ app_dir }}/chart.tgz"
     helm_values_file: "{{ app_dir }}/helm-values.yml"
     helm_image_tag: "{{ force_image_tag | default(image_tag | default(image_options.tag | default('latest'))) }}"
     helm_timeout: "{{ helm_options.timeout | default('45m') }}"
     helm_history_max: "{{ helm_options.history_max | default(10) }}"
+    helm_wait_enabled: "{{ helm_options.wait | default(true) | bool }}"
     helm_bootstrap_enabled: "{{ helm_options.bootstrap_enabled | default(true) | bool }}"
     helm_fail_on_error: "{{ helm_options.fail_on_error | default(false) | bool }}"
     helm_self_heal_enabled: "{{ helm_options.self_heal_enabled | default(true) | bool }}"
@@ -202,22 +204,26 @@
     group: root
     mode: "0600"
 
-- name: Copy Helm chart to target host
+- name: Package Helm chart locally
+  command:
+    argv:
+      - tar
+      - -C
+      - "{{ helm_chart_src }}"
+      - -czf
+      - "{{ helm_chart_archive_local }}"
+      - .
+  delegate_to: localhost
+  become: false
+  changed_when: true
+
+- name: Copy packaged Helm chart to target host
   copy:
-    src: "{{ helm_chart_src }}/"
-    dest: "{{ helm_chart_deploy_path }}/"
-    mode: preserve
-
-- name: Check copied Helm chart on target host
-  stat:
-    path: "{{ helm_chart_deploy_path }}/Chart.yaml"
-  register: helm_chart_deploy_chart
-
-- name: Validate copied Helm chart on target host
-  assert:
-    that:
-      - helm_chart_deploy_chart.stat.exists
-    fail_msg: "Helm chart was not copied to {{ helm_chart_deploy_path }} on {{ inventory_hostname }}."
+    src: "{{ helm_chart_archive_local }}"
+    dest: "{{ helm_chart_archive_remote }}"
+    owner: root
+    group: root
+    mode: "0600"
 
 - name: Check existing Helm release status
   command: >
@@ -243,8 +249,6 @@
     /usr/local/bin/helm uninstall {{ helm_release_name }}
     --namespace {{ helm_namespace }}
     --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
-    --wait
-    --timeout {{ helm_timeout }}
   register: helm_uninstall_interrupted
   when: helm_existing_release_status in ['pending-install', 'pending-upgrade', 'pending-rollback']
 
@@ -252,13 +256,12 @@
   block:
     - name: Deploy Helm release
       command: >
-        /usr/local/bin/helm upgrade --install {{ helm_release_name }} {{ helm_chart_deploy_path }}
+        /usr/local/bin/helm upgrade --install {{ helm_release_name }} {{ helm_chart_archive_remote }}
         --namespace {{ helm_namespace }}
         --create-namespace
         --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
         --values {{ helm_values_file }}
-        --wait
-        --timeout {{ helm_timeout }}
+        {% if helm_wait_enabled %}--wait --timeout {{ helm_timeout }}{% endif %}
         --history-max {{ helm_history_max }}
       register: helm_deploy
       changed_when: "'Release' in helm_deploy.stdout or 'deployed' in helm_deploy.stdout or 'upgraded' in helm_deploy.stdout"
@@ -376,13 +379,12 @@
 
     - name: Retry Helm release after self-heal
       command: >
-        /usr/local/bin/helm upgrade --install {{ helm_release_name }} {{ helm_chart_deploy_path }}
+        /usr/local/bin/helm upgrade --install {{ helm_release_name }} {{ helm_chart_archive_remote }}
         --namespace {{ helm_namespace }}
         --create-namespace
         --kubeconfig {{ k3s.kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
         --values {{ helm_values_file }}
-        --wait
-        --timeout {{ helm_timeout }}
+        {% if helm_wait_enabled %}--wait --timeout {{ helm_timeout }}{% endif %}
         --history-max {{ helm_history_max }}
       register: helm_deploy_retry
       changed_when: "'Release' in helm_deploy_retry.stdout or 'deployed' in helm_deploy_retry.stdout or 'upgraded' in helm_deploy_retry.stdout"

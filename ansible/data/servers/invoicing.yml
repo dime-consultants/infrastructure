@@ -260,6 +260,8 @@ apps:
             secretName: guardian-prod-tls
         helm:
           namespace: prod
+          wait: false
+          self_heal_enabled: false
       stage:
         domain: stage-guardian.dimeconsultants.africa
         nginx_managed: false
@@ -311,6 +313,8 @@ apps:
             secretName: guardian-stage-tls
         helm:
           namespace: stage
+          wait: false
+          self_heal_enabled: false
 
 extra_domains:
   - domain: promtail.dimeconsultants.africa
