@@ -84,6 +84,15 @@ shared_services:
     environments:
       prod:
         domain: rabbitmq.dimeconsultants.africa
+        ingress:
+          enabled: true
+          className: traefik
+          annotations:
+            traefik.ingress.kubernetes.io/router.entrypoints: websecure
+            traefik.ingress.kubernetes.io/router.tls: "true"
+            traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+          tls:
+            enabled: true
       stage: {}
 
 k3s_portainer:
@@ -92,12 +101,30 @@ k3s_portainer:
   namespace: portainer
   image: portainer/portainer-ce:2.39.0
   storage_size: 10Gi
+  ingress:
+    enabled: true
+    className: traefik
+    annotations:
+      traefik.ingress.kubernetes.io/router.entrypoints: websecure
+      traefik.ingress.kubernetes.io/router.tls: "true"
+      traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+    tls:
+      enabled: true
 
 k3s_argocd:
   enabled: true
   domain: argocd.dimeconsultants.africa
   namespace: argocd
   install_manifest_url: https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+  ingress:
+    enabled: true
+    className: traefik
+    annotations:
+      traefik.ingress.kubernetes.io/router.entrypoints: websecure
+      traefik.ingress.kubernetes.io/router.tls: "true"
+      traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+    tls:
+      enabled: true
 
 k3s_grafana:
   enabled: true
@@ -107,6 +134,15 @@ k3s_grafana:
   storage_size: 10Gi
   admin_user: admin
   admin_password: "Nqvtg9XoMPhWGq4oLPt6NWjHks6C["
+  ingress:
+    enabled: true
+    className: traefik
+    annotations:
+      traefik.ingress.kubernetes.io/router.entrypoints: websecure
+      traefik.ingress.kubernetes.io/router.tls: "true"
+      traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+    tls:
+      enabled: true
 
 apps:
   - name: invoicing
@@ -364,5 +400,15 @@ extra_domains:
   - domain: promtail.dimeconsultants.africa
     proxy_port: 9080
     basic_auth: true
+    ingress:
+      enabled: true
+      className: traefik
+      annotations:
+        traefik.ingress.kubernetes.io/router.entrypoints: websecure
+        traefik.ingress.kubernetes.io/router.tls: "true"
+        traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+      tls:
+        enabled: true
+
 backups:
   enabled: false
