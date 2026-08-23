@@ -83,6 +83,22 @@
         - /etc/apt/sources.list.d/docker.sources
       when: docker_setup_enabled | default(true) | bool
 
+    - name: Configure archived Ubuntu repositories for EOL releases
+      copy:
+        dest: /etc/apt/sources.list
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          deb http://old-releases.ubuntu.com/ubuntu/ {{ ansible_facts['distribution_release'] }} main restricted universe multiverse
+          deb http://old-releases.ubuntu.com/ubuntu/ {{ ansible_facts['distribution_release'] }}-updates main restricted universe multiverse
+          deb http://old-releases.ubuntu.com/ubuntu/ {{ ansible_facts['distribution_release'] }}-backports main restricted universe multiverse
+          deb http://old-releases.ubuntu.com/ubuntu/ {{ ansible_facts['distribution_release'] }}-security main restricted universe multiverse
+      when:
+        - ansible_facts['distribution'] | lower == 'ubuntu'
+        - ansible_facts['distribution_release'] == 'mantic'
+
+
     - name: Update apt cache
       command: apt-get update
       register: apt_update_result
