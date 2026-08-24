@@ -36,6 +36,7 @@ migration_cleanup:
 
 k3s:
   enabled: true
+  external_backend_host: 10.42.0.1
   disable:
     - metrics-server
   install_helm: false
