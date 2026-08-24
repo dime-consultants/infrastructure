@@ -106,93 +106,73 @@
 
             echo "using existing Postgres admin role $ADMIN_USER"
 
+            sql_literal() {
+              printf "%s" "$1" | sed "s/'/''/g; 1s/^/'/; \$s/$/'/"
+            }
+
+            POSTGRES_USER_SQL="$(sql_literal "$POSTGRES_USER")"
+            PGPASSWORD_SQL="$(sql_literal "$PGPASSWORD")"
+            APP_DB_NAME_SQL="$(sql_literal "$APP_DB_NAME")"
+
             role_exists() {
-              printf "%s\n" "SELECT 1 FROM pg_roles WHERE rolname = :'role_name';" |
-                psql -v ON_ERROR_STOP=1 \
-                  -U "$ADMIN_USER" \
-                  -d "$POSTGRES_DB" \
-                  -v role_name="$POSTGRES_USER" \
-                  -tA |
+              psql -v ON_ERROR_STOP=1 \
+                -U "$ADMIN_USER" \
+                -d "$POSTGRES_DB" \
+                -tAc "SELECT 1 FROM pg_roles WHERE rolname = $POSTGRES_USER_SQL" |
                 grep -qx 1
             }
 
             if role_exists; then
-              psql -v ON_ERROR_STOP=1 \
+              ROLE_SQL="$(psql -v ON_ERROR_STOP=1 \
                 -U "$ADMIN_USER" \
                 -d "$POSTGRES_DB" \
-                -v role_name="$POSTGRES_USER" \
-                -v role_password="$PGPASSWORD" \
-                -tA <<'SQL' |
-                  SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'role_name', :'role_password');
-        SQL
-                psql -v ON_ERROR_STOP=1 \
-                  -U "$ADMIN_USER" \
-                  -d "$POSTGRES_DB"
+                -tAc "SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', $POSTGRES_USER_SQL, $PGPASSWORD_SQL)")"
+              printf "%s\n" "$ROLE_SQL" |
+                psql -v ON_ERROR_STOP=1 -U "$ADMIN_USER" -d "$POSTGRES_DB"
               echo "updated role $POSTGRES_USER"
             else
-              psql -v ON_ERROR_STOP=1 \
+              ROLE_SQL="$(psql -v ON_ERROR_STOP=1 \
                 -U "$ADMIN_USER" \
                 -d "$POSTGRES_DB" \
-                -v role_name="$POSTGRES_USER" \
-                -v role_password="$PGPASSWORD" \
-                -tA <<'SQL' |
-                  SELECT format('CREATE ROLE %I WITH LOGIN PASSWORD %L', :'role_name', :'role_password');
-        SQL
-                psql -v ON_ERROR_STOP=1 \
-                  -U "$ADMIN_USER" \
-                  -d "$POSTGRES_DB"
+                -tAc "SELECT format('CREATE ROLE %I WITH LOGIN PASSWORD %L', $POSTGRES_USER_SQL, $PGPASSWORD_SQL)")"
+              printf "%s\n" "$ROLE_SQL" |
+                psql -v ON_ERROR_STOP=1 -U "$ADMIN_USER" -d "$POSTGRES_DB"
               echo "created role $POSTGRES_USER"
             fi
 
             database_exists() {
-              printf "%s\n" "SELECT 1 FROM pg_database WHERE datname = :'app_db';" |
-                psql -v ON_ERROR_STOP=1 \
-                  -U "$ADMIN_USER" \
-                  -d "$POSTGRES_DB" \
-                  -v app_db="$APP_DB_NAME" \
-                  -tA |
+              psql -v ON_ERROR_STOP=1 \
+                -U "$ADMIN_USER" \
+                -d "$POSTGRES_DB" \
+                -tAc "SELECT 1 FROM pg_database WHERE datname = $APP_DB_NAME_SQL" |
                 grep -qx 1
             }
 
             if database_exists; then
               echo "database $APP_DB_NAME already exists"
             else
-              psql -v ON_ERROR_STOP=1 \
+              DATABASE_SQL="$(psql -v ON_ERROR_STOP=1 \
                 -U "$ADMIN_USER" \
                 -d "$POSTGRES_DB" \
-                -v app_db="$APP_DB_NAME" \
-                -v owner_role="$POSTGRES_USER" \
-                -tA <<'SQL' |
-                  SELECT format('CREATE DATABASE %I OWNER %I', :'app_db', :'owner_role');
-        SQL
-                psql -v ON_ERROR_STOP=1 \
-                  -U "$ADMIN_USER" \
-                  -d "$POSTGRES_DB"
+                -tAc "SELECT format('CREATE DATABASE %I OWNER %I', $APP_DB_NAME_SQL, $POSTGRES_USER_SQL)")"
+              printf "%s\n" "$DATABASE_SQL" |
+                psql -v ON_ERROR_STOP=1 -U "$ADMIN_USER" -d "$POSTGRES_DB"
               echo "created database $APP_DB_NAME"
             fi
 
-            psql -v ON_ERROR_STOP=1 \
+            GRANT_DATABASE_SQL="$(psql -v ON_ERROR_STOP=1 \
               -U "$ADMIN_USER" \
               -d "$POSTGRES_DB" \
-              -v app_db="$APP_DB_NAME" \
-              -v role_name="$POSTGRES_USER" \
-              -tA <<'SQL' |
-                SELECT format('GRANT ALL PRIVILEGES ON DATABASE %I TO %I', :'app_db', :'role_name');
-        SQL
-              psql -v ON_ERROR_STOP=1 \
-                -U "$ADMIN_USER" \
-                -d "$POSTGRES_DB"
+              -tAc "SELECT format('GRANT ALL PRIVILEGES ON DATABASE %I TO %I', $APP_DB_NAME_SQL, $POSTGRES_USER_SQL)")"
+            printf "%s\n" "$GRANT_DATABASE_SQL" |
+              psql -v ON_ERROR_STOP=1 -U "$ADMIN_USER" -d "$POSTGRES_DB"
 
-            psql -v ON_ERROR_STOP=1 \
+            GRANT_SCHEMA_SQL="$(psql -v ON_ERROR_STOP=1 \
               -U "$ADMIN_USER" \
               -d "$APP_DB_NAME" \
-              -v role_name="$POSTGRES_USER" \
-              -tA <<'SQL' |
-                SELECT format('GRANT ALL ON SCHEMA public TO %I', :'role_name');
-        SQL
-              psql -v ON_ERROR_STOP=1 \
-                -U "$ADMIN_USER" \
-                -d "$APP_DB_NAME"
+              -tAc "SELECT format('GRANT ALL ON SCHEMA public TO %I', $POSTGRES_USER_SQL)")"
+            printf "%s\n" "$GRANT_SCHEMA_SQL" |
+              psql -v ON_ERROR_STOP=1 -U "$ADMIN_USER" -d "$APP_DB_NAME"
 
             database_exists
         POSTGRES_PROVISION
