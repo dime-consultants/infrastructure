@@ -1,10 +1,35 @@
-name: Deploy App (from repository_dispatch)
+name: Deploy App
 
-run-name: Deploy ${{ github.event.client_payload.app_repo }} ${{ github.event.client_payload.env }}
+run-name: Deploy ${{ github.event.client_payload.app_repo || inputs.app_repo }} ${{ github.event.client_payload.env || inputs.env }}
 
 on:
   repository_dispatch:
     types: [deploy-app]
+  workflow_dispatch:
+    inputs:
+      app_repo:
+        description: 'Full repo name (for example: dime-consultants/ai_invoicing)'
+        required: true
+        type: string
+      env:
+        description: 'Environment'
+        required: true
+        type: choice
+        options:
+          - prod
+          - stage
+      image_tag:
+        description: 'Full image tag to deploy'
+        required: true
+        type: string
+      server:
+        description: 'Optional target environment name (for example: dime)'
+        required: false
+        type: string
+      docker_compose_b64:
+        description: 'Optional base64-encoded docker-compose.yml for Compose apps'
+        required: false
+        type: string
 
 jobs:
   resolve-targets:
@@ -22,15 +47,15 @@ jobs:
       - name: Build target deploy matrix
         id: targets
         env:
-          TARGET_SERVER: ${{ github.event.client_payload.target_server || github.event.client_payload.server }}
+          TARGET_SERVER: ${{ github.event.client_payload.target_server || github.event.client_payload.server || inputs.server }}
         run: |
           python3 ansible/scripts/deployment_resolver.py targets \
-            --app "${{ github.event.client_payload.app_repo }}" \
-            --env "${{ github.event.client_payload.env }}" \
+            --app "${{ github.event.client_payload.app_repo || inputs.app_repo }}" \
+            --env "${{ github.event.client_payload.env || inputs.env }}" \
             --server "$TARGET_SERVER"
             
   deploy:
-    name: Deploy ${{ github.event.client_payload.app_repo }} ${{ github.event.client_payload.env }} to ${{ matrix.server }}
+    name: Deploy ${{ github.event.client_payload.app_repo || inputs.app_repo }} ${{ github.event.client_payload.env || inputs.env }} to ${{ matrix.server }}
     needs: resolve-targets
     if: needs.resolve-targets.outputs.servers != ''
     runs-on: ubuntu-latest
@@ -68,14 +93,14 @@ jobs:
           ansible-galaxy collection install 'community.docker:>3.0.0'
 
       - name: Decode docker-compose.yml
-        if: ${{ github.event.client_payload.docker_compose_b64 != null && github.event.client_payload.docker_compose_b64 != '' }}
+        if: ${{ (github.event.client_payload.docker_compose_b64 || inputs.docker_compose_b64) != null && (github.event.client_payload.docker_compose_b64 || inputs.docker_compose_b64) != '' }}
         run: |
-          echo "${{ github.event.client_payload.docker_compose_b64 }}" | base64 -d > /tmp/docker-compose-raw.yml
+          echo "${{ github.event.client_payload.docker_compose_b64 || inputs.docker_compose_b64 }}" | base64 -d > /tmp/docker-compose-raw.yml
 
       - name: Create .env file
         env:
-          IMAGE_TAG: ${{ github.event.client_payload.image_tag }}
-          SHARED_ENV: ${{ github.event.client_payload.env }}
+          IMAGE_TAG: ${{ github.event.client_payload.image_tag || inputs.image_tag }}
+          SHARED_ENV: ${{ github.event.client_payload.env || inputs.env }}
           ENV_VARS_JSON: ${{ toJson(github.event.client_payload.env_vars) }}
           ENV_SECRETS_JSON: ${{ toJson(github.event.client_payload.env_secrets) }}
         run: |
@@ -104,14 +129,14 @@ jobs:
           TARGET_PUBLIC_IP: ${{ secrets[format('{0}', matrix.public_ip_secret_name)] }}
         run: |
           python3 ansible/scripts/deployment_resolver.py env \
-            --app "${{ github.event.client_payload.app_repo }}" \
-            --env "${{ github.event.client_payload.env }}" \
+            --app "${{ github.event.client_payload.app_repo || inputs.app_repo }}" \
+            --env "${{ github.event.client_payload.env || inputs.env }}" \
             --target-server "${{ matrix.server }}" \
             --output /tmp/.env \
             --append
 
       - name: Render final docker-compose
-        if: ${{ github.event.client_payload.docker_compose_b64 != null && github.event.client_payload.docker_compose_b64 != '' }}
+        if: ${{ (github.event.client_payload.docker_compose_b64 || inputs.docker_compose_b64) != null && (github.event.client_payload.docker_compose_b64 || inputs.docker_compose_b64) != '' }}
         run: |
           docker compose -f /tmp/docker-compose-raw.yml --env-file /tmp/.env config > /tmp/docker-compose.yml
 
@@ -150,17 +175,17 @@ jobs:
           chmod 600 "$KEY_FILE"
           printf '%s\n' "$SSH_PRIVATE_KEY" > "$KEY_FILE"
 
-          app_name=$(basename "${{ github.event.client_payload.app_repo }}")
-          env="${{ github.event.client_payload.env }}"
+          app_name=$(basename "${{ github.event.client_payload.app_repo || inputs.app_repo }}")
+          env="${{ github.event.client_payload.env || inputs.env }}"
           echo "Deploying $app_name ($env) to ${{ matrix.server }}"
           ansible-playbook ansible/playbooks/deploy-app.yml \
             --inventory ansible/inventory/dynamic_inventory.py \
             --extra-vars "target_server=${{ matrix.server }}" \
             --extra-vars "app_name=$app_name" \
-            --extra-vars "app_repo=${{ github.event.client_payload.app_repo }}" \
+            --extra-vars "app_repo=${{ github.event.client_payload.app_repo || inputs.app_repo }}" \
             --extra-vars "env=$env" \
             --extra-vars "compose_file=/tmp/docker-compose.yml" \
             --extra-vars "env_file=/tmp/.env" \
-            --extra-vars "image_tag=${{ github.event.client_payload.image_tag }}" \
+            --extra-vars "image_tag=${{ github.event.client_payload.image_tag || inputs.image_tag }}" \
             --timeout 15 \
             --private-key "$KEY_FILE"

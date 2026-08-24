@@ -356,7 +356,7 @@ Example app workflow fragment:
   uses: peter-evans/repository-dispatch@v3
   with:
     token: ${{ secrets.INFRA_DISPATCH_TOKEN }}
-    repository: dime-consultants/infra
+    repository: dime-consultants/infrastructure
     event-type: deploy-app
     client-payload: ${{ steps.payload.outputs.payload }}
 ```
@@ -479,4 +479,3 @@ Check that:
 - Shared-service secrets exist in GitHub Secrets.
 - The shared Postgres/RabbitMQ services are running.
 - The app deployment targets the intended environment only.
-

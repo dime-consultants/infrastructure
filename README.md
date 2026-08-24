@@ -355,7 +355,7 @@ Example app repository GitHub Actions step:
   uses: peter-evans/repository-dispatch@v3
   with:
     token: ${{ secrets.INFRA_DISPATCH_TOKEN }}
-    repository: dime-consultants/infra
+    repository: dime-consultants/infrastructure
     event-type: deploy-app
     client-payload: ${{ steps.payload.outputs.payload }}
 ```
