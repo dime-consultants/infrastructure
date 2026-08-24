@@ -89,7 +89,7 @@
       include_tasks: ../tasks/apps/provision-shared-dependencies-for-app.yml
       vars:
         shared_dependency_app: "{{ deployment_app }}"
-        shared_dependency_app_env_item:
+        shared_dependency_target_env_item:
           key: "{{ env }}"
           value: "{{ deployment_app.environments[env] }}"
         app_postgres_subscription: "{{ shared_services | default([]) | selectattr('name', 'equalto', 'postgres') | first | default({}) }}"

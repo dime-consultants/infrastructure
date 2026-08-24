@@ -8,8 +8,8 @@
       config required by {{ shared_dependency_app.name }}.
   loop: >-
     {{
-      [shared_dependency_app_env_item]
-      if shared_dependency_app_env_item is defined
+      [shared_dependency_target_env_item]
+      if shared_dependency_target_env_item is defined
       else (shared_dependency_app.environments | default({}) | dict2items)
     }}
   loop_control:
@@ -21,8 +21,8 @@
   include_tasks: ../shared-services/provision-postgres-database.yml
   loop: >-
     {{
-      [shared_dependency_app_env_item]
-      if shared_dependency_app_env_item is defined
+      [shared_dependency_target_env_item]
+      if shared_dependency_target_env_item is defined
       else (shared_dependency_app.environments | default({}) | dict2items)
     }}
   loop_control:
@@ -54,8 +54,8 @@
       config required by {{ shared_dependency_app.name }}.
   loop: >-
     {{
-      [shared_dependency_app_env_item]
-      if shared_dependency_app_env_item is defined
+      [shared_dependency_target_env_item]
+      if shared_dependency_target_env_item is defined
       else (shared_dependency_app.environments | default({}) | dict2items)
     }}
   loop_control:
@@ -67,8 +67,8 @@
   include_tasks: ../shared-services/provision-rabbitmq-namespace.yml
   loop: >-
     {{
-      [shared_dependency_app_env_item]
-      if shared_dependency_app_env_item is defined
+      [shared_dependency_target_env_item]
+      if shared_dependency_target_env_item is defined
       else (shared_dependency_app.environments | default({}) | dict2items)
     }}
   loop_control:
