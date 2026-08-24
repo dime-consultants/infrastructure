@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: master
 
       - name: Build target deploy matrix
         id: targets
@@ -41,6 +43,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: master
+
+      - name: Show infra revision
+        run: git rev-parse --short HEAD
 
       - name: Setup tools
         uses: actions/setup-python@v4

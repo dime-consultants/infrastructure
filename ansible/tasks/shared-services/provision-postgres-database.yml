@@ -190,6 +190,167 @@
       delay: 5
       until: postgres_database_provision.rc == 0
   rescue:
+    - name: Self-heal Postgres role, database, and grants
+      ansible.builtin.shell: |
+        set -eu
+
+        POSTGRES_CONTAINER="$(
+          docker compose \
+            --project-directory "{{ postgres_shared_project_dir }}" \
+            -p "{{ postgres_shared_project_name }}" \
+            -f "{{ postgres_shared_project_dir }}/docker-compose.yml" \
+            ps -q postgres
+        )"
+
+        if [ -z "$POSTGRES_CONTAINER" ]; then
+          echo "Postgres shared service container not found for {{ postgres_shared_project_name }}" >&2
+          exit 1
+        fi
+
+        if [ "$(docker inspect -f '{{ "{{" }}.State.Running{{ "}}" }}' "$POSTGRES_CONTAINER")" != "true" ]; then
+          echo "Postgres container $POSTGRES_CONTAINER is not running" >&2
+          exit 1
+        fi
+
+        docker exec \
+          -i \
+          -e PGPASSWORD \
+          -e POSTGRES_USER \
+          -e POSTGRES_DB \
+          -e APP_DB_NAME \
+          "$POSTGRES_CONTAINER" \
+          sh -s <<'POSTGRES_SELF_HEAL'
+            set -eu
+            echo "self-healing database $APP_DB_NAME using admin database $POSTGRES_DB"
+
+            find_admin_user() {
+              for candidate in postgres app "$POSTGRES_USER"; do
+                if psql -v ON_ERROR_STOP=1 \
+                    -U "$candidate" \
+                    -d "$POSTGRES_DB" \
+                    -tAc "SELECT 1" >/dev/null 2>&1; then
+                  printf "%s" "$candidate"
+                  return 0
+                fi
+              done
+
+              for candidate in postgres app "$POSTGRES_USER"; do
+                if psql -v ON_ERROR_STOP=1 \
+                    -U "$candidate" \
+                    -d postgres \
+                    -tAc "SELECT 1" >/dev/null 2>&1; then
+                  POSTGRES_DB=postgres
+                  printf "%s" "$candidate"
+                  return 0
+                fi
+              done
+
+              return 1
+            }
+
+            ADMIN_USER="$(find_admin_user)" || {
+              echo "could not find an existing Postgres admin role; tried postgres, app, and desired role" >&2
+              exit 1
+            }
+
+            sql_literal() {
+              printf "%s" "$1" | sed "s/'/''/g; 1s/^/'/; \$s/$/'/"
+            }
+
+            POSTGRES_USER_SQL="$(sql_literal "$POSTGRES_USER")"
+            PGPASSWORD_SQL="$(sql_literal "$PGPASSWORD")"
+            APP_DB_NAME_SQL="$(sql_literal "$APP_DB_NAME")"
+
+            ROLE_EXISTS="$(
+              psql -v ON_ERROR_STOP=1 \
+                -U "$ADMIN_USER" \
+                -d "$POSTGRES_DB" \
+                -tAc "SELECT 1 FROM pg_roles WHERE rolname = $POSTGRES_USER_SQL"
+            )"
+
+            if [ "$ROLE_EXISTS" = "1" ]; then
+              ROLE_SQL="$(
+                psql -v ON_ERROR_STOP=1 \
+                  -U "$ADMIN_USER" \
+                  -d "$POSTGRES_DB" \
+                  -tAc "SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', $POSTGRES_USER_SQL, $PGPASSWORD_SQL)"
+              )"
+              printf "%s\n" "$ROLE_SQL" |
+                psql -v ON_ERROR_STOP=1 -U "$ADMIN_USER" -d "$POSTGRES_DB"
+              echo "self-healed role $POSTGRES_USER"
+            else
+              ROLE_SQL="$(
+                psql -v ON_ERROR_STOP=1 \
+                  -U "$ADMIN_USER" \
+                  -d "$POSTGRES_DB" \
+                  -tAc "SELECT format('CREATE ROLE %I WITH LOGIN PASSWORD %L', $POSTGRES_USER_SQL, $PGPASSWORD_SQL)"
+              )"
+              printf "%s\n" "$ROLE_SQL" |
+                psql -v ON_ERROR_STOP=1 -U "$ADMIN_USER" -d "$POSTGRES_DB"
+              echo "self-healed missing role $POSTGRES_USER"
+            fi
+
+            DATABASE_EXISTS="$(
+              psql -v ON_ERROR_STOP=1 \
+                -U "$ADMIN_USER" \
+                -d "$POSTGRES_DB" \
+                -tAc "SELECT 1 FROM pg_database WHERE datname = $APP_DB_NAME_SQL"
+            )"
+
+            if [ "$DATABASE_EXISTS" = "1" ]; then
+              echo "database $APP_DB_NAME already exists"
+            else
+              DATABASE_SQL="$(
+                psql -v ON_ERROR_STOP=1 \
+                  -U "$ADMIN_USER" \
+                  -d "$POSTGRES_DB" \
+                  -tAc "SELECT format('CREATE DATABASE %I OWNER %I', $APP_DB_NAME_SQL, $POSTGRES_USER_SQL)"
+              )"
+              printf "%s\n" "$DATABASE_SQL" |
+                psql -v ON_ERROR_STOP=1 -U "$ADMIN_USER" -d "$POSTGRES_DB"
+              echo "self-healed missing database $APP_DB_NAME"
+            fi
+
+            GRANT_DATABASE_SQL="$(
+              psql -v ON_ERROR_STOP=1 \
+                -U "$ADMIN_USER" \
+                -d "$POSTGRES_DB" \
+                -tAc "SELECT format('GRANT ALL PRIVILEGES ON DATABASE %I TO %I', $APP_DB_NAME_SQL, $POSTGRES_USER_SQL)"
+            )"
+            printf "%s\n" "$GRANT_DATABASE_SQL" |
+              psql -v ON_ERROR_STOP=1 -U "$ADMIN_USER" -d "$POSTGRES_DB"
+
+            GRANT_SCHEMA_SQL="$(
+              psql -v ON_ERROR_STOP=1 \
+                -U "$ADMIN_USER" \
+                -d "$APP_DB_NAME" \
+                -tAc "SELECT format('GRANT ALL ON SCHEMA public TO %I', $POSTGRES_USER_SQL)"
+            )"
+            printf "%s\n" "$GRANT_SCHEMA_SQL" |
+              psql -v ON_ERROR_STOP=1 -U "$ADMIN_USER" -d "$APP_DB_NAME"
+
+            psql -v ON_ERROR_STOP=1 \
+              -U "$ADMIN_USER" \
+              -d "$POSTGRES_DB" \
+              -tAc "SELECT 1 FROM pg_database WHERE datname = $APP_DB_NAME_SQL" |
+              grep -qx 1
+
+            echo "self-heal complete for database $APP_DB_NAME"
+        POSTGRES_SELF_HEAL
+      environment:
+        PGPASSWORD: "{{ postgres_database_password }}"
+        POSTGRES_USER: "{{ postgres_database_user }}"
+        POSTGRES_DB: "{{ postgres_admin_database }}"
+        APP_DB_NAME: "{{ postgres_database_name }}"
+      register: postgres_database_self_heal
+      changed_when: postgres_database_self_heal.rc == 0
+      failed_when: false
+
+    - name: Report Postgres self-heal success
+      debug:
+        msg: "{{ postgres_database_self_heal.stdout_lines | default([]) }}"
+      when: postgres_database_self_heal.rc | default(1) == 0
+
     - name: Show Postgres shared service status
       command: >
         docker compose
@@ -200,6 +361,7 @@
       register: postgres_provision_ps
       changed_when: false
       failed_when: false
+      when: postgres_database_self_heal.rc | default(1) != 0
 
     - name: Show Postgres shared service logs
       command: >
@@ -211,6 +373,7 @@
       register: postgres_provision_logs
       changed_when: false
       failed_when: false
+      when: postgres_database_self_heal.rc | default(1) != 0
 
     - name: Print Postgres provisioning diagnostics
       debug:
@@ -219,7 +382,9 @@
           - "{{ postgres_provision_ps.stdout_lines | default([]) }}"
           - "docker compose logs --tail=100 postgres:"
           - "{{ postgres_provision_logs.stdout_lines | default([]) }}"
+      when: postgres_database_self_heal.rc | default(1) != 0
 
     - name: Fail Postgres provisioning
       fail:
         msg: "Could not provision database {{ postgres_database_name }} for {{ postgres_app.name }}:{{ shared_service_env }}."
+      when: postgres_database_self_heal.rc | default(1) != 0
