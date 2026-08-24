@@ -206,6 +206,13 @@ def deployment_env_values(server, app, env_options, env_name, shared_service_cat
             )
         postgres_subscription = subscribed_environment(server, "postgres", env_name)
         postgres_config = service_env_config(shared_service_catalog, "postgres", env_name)
+        if deployment_runtime in {"helm", "k3s"}:
+            default_database_host = k3s_backend_host
+            default_database_port = postgres_config.get("published_port", 5432)
+        else:
+            default_database_host = postgres_config.get("service_host", "postgres")
+            default_database_port = 5432
+
         env_values.update(
             {
                 "DATABASE_DB": database_name,
@@ -215,12 +222,13 @@ def deployment_env_values(server, app, env_options, env_name, shared_service_cat
                     app_env.get("database_host")
                     or app_env.get("postgres_host")
                     or os.environ.get("APP_DATABASE_HOST")
+                    or default_database_host
                     or "10.17.0.5"
                 ),
                 "DATABASE_PORT": str(
                     app_env.get("database_port")
                     or os.environ.get("APP_DATABASE_PORT")
-                    or 5432
+                    or default_database_port
                 ),
                 "SHARED_NETWORK": postgres_config.get("network", f"shared-{env_name}"),
             }
