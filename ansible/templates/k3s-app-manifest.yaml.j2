@@ -43,7 +43,11 @@
 {% set app_labels = {
   'app.kubernetes.io/name': app_name,
   'app.kubernetes.io/instance': k3s_app_release_name,
-  'app.kubernetes.io/managed-by': 'ansible'
+  'app.kubernetes.io/managed-by': 'ansible',
+  'app.kubernetes.io/part-of': 'dime-apps',
+  'dimeconsultants.africa/app': deployment_app.name,
+  'dimeconsultants.africa/environment': env,
+  'observability.grafana.com/logs': 'enabled'
 } %}
 {% set selector_labels = {
   'app.kubernetes.io/name': app_name,
@@ -102,6 +106,11 @@ spec:
     metadata:
       labels:
 {{ selector_labels | to_nice_yaml(indent=2) | indent(8, true) }}
+        app.kubernetes.io/managed-by: ansible
+        app.kubernetes.io/part-of: dime-apps
+        dimeconsultants.africa/app: {{ deployment_app.name }}
+        dimeconsultants.africa/environment: {{ env }}
+        observability.grafana.com/logs: "enabled"
 {% if deployment_app_env.podAnnotations | default({}) %}
       annotations:
 {{ deployment_app_env.podAnnotations | to_nice_yaml(indent=2) | indent(8, true) }}

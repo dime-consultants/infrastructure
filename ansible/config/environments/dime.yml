@@ -133,6 +133,12 @@ k3s_grafana:
   namespace: grafana
   image: grafana/grafana-oss:11.1.4
   storage_size: 10Gi
+  loki:
+    enabled: true
+    retention_period: 24h
+    storage_size: 10Gi
+  promtail:
+    enabled: true
   admin_user_secret_name: GRAFANA_PROD_USER
   admin_password_secret_name: GRAFANA_PROD_PASSWORD
   ingress:
