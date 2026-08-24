@@ -47,6 +47,7 @@ Shared service secrets:
 | `POSTGRES_PROD_PASSWORD` | Shared production Postgres password |
 | `POSTGRES_STAGE_USER` | Shared stage Postgres user |
 | `POSTGRES_STAGE_PASSWORD` | Shared stage Postgres password |
+| `APP_DATABASE_PASSWORD` | App database password used with DB user `root` |
 | `RABBITMQ_PROD_USER` | Shared production RabbitMQ user |
 | `RABBITMQ_PROD_PASSWORD` | Shared production RabbitMQ password |
 | `RABBITMQ_STAGE_USER` | Shared stage RabbitMQ user |

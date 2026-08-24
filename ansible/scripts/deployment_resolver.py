@@ -69,6 +69,14 @@ def repo_slug(value):
     return normalized
 
 
+def app_database_name(app, app_env, env_name):
+    if app_env.get("database_name"):
+        return str(app_env["database_name"])
+    source = app_env.get("database_name_source") or app.get("repo") or app.get("name")
+    slug = repo_slug(source).replace("-", "_")
+    return f"{slug}_{env_name}"
+
+
 def app_identifiers(app):
     identifiers = {
         normalize_identifier(app.get("name")),
@@ -188,38 +196,31 @@ def deployment_env_values(server, app, env_options, env_name, shared_service_cat
         env_values["API_PORT"] = str(app_port)
 
     if postgres_database:
+        database_name = app_database_name(app, app_env, env_name)
+        database_user = os.environ.get("APP_DATABASE_USER") or "root"
+        database_password = os.environ.get("APP_DATABASE_PASSWORD")
+        if not database_password:
+            fail(
+                "GitHub Secret APP_DATABASE_PASSWORD is required for app database "
+                f"credentials for {app.get('name')}:{env_name}"
+            )
         postgres_subscription = subscribed_environment(server, "postgres", env_name)
         postgres_config = service_env_config(shared_service_catalog, "postgres", env_name)
-        postgres_secret_names = (
-            postgres_subscription.get("secret_names")
-            or postgres_config.get("secret_names")
-            or {}
-        )
         env_values.update(
             {
-                "DATABASE_DB": postgres_database,
-                "DATABASE_USER": secret_value(
-                    postgres_secret_names, "username", f"postgres:{env_name}"
-                ),
-                "DATABASE_PASSWORD": secret_value(
-                    postgres_secret_names, "password", f"postgres:{env_name}"
-                ),
+                "DATABASE_DB": database_name,
+                "DATABASE_USER": database_user,
+                "DATABASE_PASSWORD": database_password,
                 "DATABASE_HOST": (
                     app_env.get("database_host")
                     or app_env.get("postgres_host")
-                    or (
-                        k3s_backend_host
-                        if deployment_runtime in {"helm", "k3s"} and k3s_backend_host
-                        else postgres_config.get("service_host", "postgres")
-                    )
+                    or os.environ.get("APP_DATABASE_HOST")
+                    or "138.197.114.62"
                 ),
                 "DATABASE_PORT": str(
                     app_env.get("database_port")
-                    or (
-                        postgres_config.get("published_port", 5432)
-                        if deployment_runtime in {"helm", "k3s"}
-                        else 5432
-                    )
+                    or os.environ.get("APP_DATABASE_PORT")
+                    or 5432
                 ),
                 "SHARED_NETWORK": postgres_config.get("network", f"shared-{env_name}"),
             }

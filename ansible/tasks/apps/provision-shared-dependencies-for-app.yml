@@ -2,9 +2,11 @@
 - name: Validate Postgres catalog for app environment
   assert:
     that:
-      - shared_dependency_env_loop_item.key in shared_service_catalog.postgres.environments
+      - ((shared_dependency_app | combine(shared_dependency_env_loop_item.value, recursive=True)).postgres_service_env | default('prod')) in shared_service_catalog.postgres.environments
     fail_msg: >-
-      Shared service catalog has no postgres:{{ shared_dependency_env_loop_item.key }}
+      Shared service catalog has no postgres:{{
+        (shared_dependency_app | combine(shared_dependency_env_loop_item.value, recursive=True)).postgres_service_env | default('prod')
+      }}
       config required by {{ shared_dependency_app.name }}.
   loop: >-
     {{
@@ -30,9 +32,10 @@
     label: "{{ shared_dependency_app.name }}:{{ shared_dependency_env_loop_item.key }}"
   vars:
     shared_service_name: postgres
-    shared_service_env: "{{ shared_dependency_env_loop_item.key }}"
-    shared_service_env_config: "{{ shared_service_catalog.postgres.environments[shared_dependency_env_loop_item.key] }}"
+    shared_service_env: "{{ (shared_dependency_app | combine(shared_dependency_env_loop_item.value, recursive=True)).postgres_service_env | default('prod') }}"
+    shared_service_env_config: "{{ shared_service_catalog.postgres.environments[(shared_dependency_app | combine(shared_dependency_env_loop_item.value, recursive=True)).postgres_service_env | default('prod')] }}"
     postgres_app: "{{ shared_dependency_app }}"
+    postgres_deployment_env: "{{ shared_dependency_env_loop_item.key }}"
     postgres_app_env: "{{ shared_dependency_app | combine(shared_dependency_env_loop_item.value, recursive=True) }}"
     postgres_secret_names: >-
       {{

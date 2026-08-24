@@ -1,9 +1,13 @@
 ---
 - name: Resolve Postgres database credentials
   set_fact:
-    postgres_database_name: "{{ postgres_app_env.postgres_database }}"
-    postgres_database_user: "{{ lookup('env', postgres_secret_names.username) }}"
-    postgres_database_password: "{{ lookup('env', postgres_secret_names.password) }}"
+    postgres_database_name: >-
+      {{
+        postgres_app_env.database_name
+        | default(((postgres_app.repo | default(postgres_app.name) | regex_replace('^.*/', '') | regex_replace('-', '_')) ~ '_' ~ (postgres_deployment_env | default(shared_service_env))), true)
+      }}
+    postgres_database_user: "{{ lookup('env', 'APP_DATABASE_USER') | default(lookup('env', postgres_secret_names.username), true) }}"
+    postgres_database_password: "{{ lookup('env', 'APP_DATABASE_PASSWORD') | default(lookup('env', postgres_secret_names.password), true) }}"
     postgres_admin_database: "{{ shared_service_env_config.database | default('postgres') }}"
     postgres_shared_project_dir: "{{ shared_service_base_dir }}/{{ shared_service_name }}/{{ shared_service_env }}"
     postgres_shared_project_name: "shared_{{ shared_service_name }}_{{ shared_service_env }}"
