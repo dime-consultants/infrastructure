@@ -2,70 +2,90 @@
 - name: Validate Postgres catalog for app environment
   assert:
     that:
-      - shared_dependency_app_env_item.key in shared_service_catalog.postgres.environments
+      - shared_dependency_env_loop_item.key in shared_service_catalog.postgres.environments
     fail_msg: >-
-      Shared service catalog has no postgres:{{ shared_dependency_app_env_item.key }}
+      Shared service catalog has no postgres:{{ shared_dependency_env_loop_item.key }}
       config required by {{ shared_dependency_app.name }}.
-  loop: "{{ shared_dependency_app.environments | default({}) | dict2items }}"
+  loop: >-
+    {{
+      [shared_dependency_app_env_item]
+      if shared_dependency_app_env_item is defined
+      else (shared_dependency_app.environments | default({}) | dict2items)
+    }}
   loop_control:
-    loop_var: shared_dependency_app_env_item
-    label: "{{ shared_dependency_app.name }}:{{ shared_dependency_app_env_item.key }}"
-  when: (shared_dependency_app | combine(shared_dependency_app_env_item.value, recursive=True)).postgres_database is defined
+    loop_var: shared_dependency_env_loop_item
+    label: "{{ shared_dependency_app.name }}:{{ shared_dependency_env_loop_item.key }}"
+  when: (shared_dependency_app | combine(shared_dependency_env_loop_item.value, recursive=True)).postgres_database is defined
 
 - name: Provision Postgres database for app environment
   include_tasks: ../shared-services/provision-postgres-database.yml
-  loop: "{{ shared_dependency_app.environments | default({}) | dict2items }}"
+  loop: >-
+    {{
+      [shared_dependency_app_env_item]
+      if shared_dependency_app_env_item is defined
+      else (shared_dependency_app.environments | default({}) | dict2items)
+    }}
   loop_control:
-    loop_var: shared_dependency_app_env_item
-    label: "{{ shared_dependency_app.name }}:{{ shared_dependency_app_env_item.key }}"
+    loop_var: shared_dependency_env_loop_item
+    label: "{{ shared_dependency_app.name }}:{{ shared_dependency_env_loop_item.key }}"
   vars:
     shared_service_name: postgres
-    shared_service_env: "{{ shared_dependency_app_env_item.key }}"
-    shared_service_env_config: "{{ shared_service_catalog.postgres.environments[shared_dependency_app_env_item.key] }}"
+    shared_service_env: "{{ shared_dependency_env_loop_item.key }}"
+    shared_service_env_config: "{{ shared_service_catalog.postgres.environments[shared_dependency_env_loop_item.key] }}"
     postgres_app: "{{ shared_dependency_app }}"
-    postgres_app_env: "{{ shared_dependency_app | combine(shared_dependency_app_env_item.value, recursive=True) }}"
+    postgres_app_env: "{{ shared_dependency_app | combine(shared_dependency_env_loop_item.value, recursive=True) }}"
     postgres_secret_names: >-
       {{
         (app_postgres_subscription.environments | default({}))
-        .get(shared_dependency_app_env_item.key, {})
+        .get(shared_dependency_env_loop_item.key, {})
         .get(
           'secret_names',
-          shared_service_catalog.postgres.environments[shared_dependency_app_env_item.key].secret_names | default({})
+          shared_service_catalog.postgres.environments[shared_dependency_env_loop_item.key].secret_names | default({})
         )
       }}
-  when: (shared_dependency_app | combine(shared_dependency_app_env_item.value, recursive=True)).postgres_database is defined
+  when: (shared_dependency_app | combine(shared_dependency_env_loop_item.value, recursive=True)).postgres_database is defined
 
 - name: Validate RabbitMQ catalog for app environment
   assert:
     that:
-      - shared_dependency_app_env_item.key in shared_service_catalog.rabbitmq.environments
+      - shared_dependency_env_loop_item.key in shared_service_catalog.rabbitmq.environments
     fail_msg: >-
-      Shared service catalog has no rabbitmq:{{ shared_dependency_app_env_item.key }}
+      Shared service catalog has no rabbitmq:{{ shared_dependency_env_loop_item.key }}
       config required by {{ shared_dependency_app.name }}.
-  loop: "{{ shared_dependency_app.environments | default({}) | dict2items }}"
+  loop: >-
+    {{
+      [shared_dependency_app_env_item]
+      if shared_dependency_app_env_item is defined
+      else (shared_dependency_app.environments | default({}) | dict2items)
+    }}
   loop_control:
-    loop_var: shared_dependency_app_env_item
-    label: "{{ shared_dependency_app.name }}:{{ shared_dependency_app_env_item.key }}"
-  when: (shared_dependency_app | combine(shared_dependency_app_env_item.value, recursive=True)).rabbitmq_namespace is defined
+    loop_var: shared_dependency_env_loop_item
+    label: "{{ shared_dependency_app.name }}:{{ shared_dependency_env_loop_item.key }}"
+  when: (shared_dependency_app | combine(shared_dependency_env_loop_item.value, recursive=True)).rabbitmq_namespace is defined
 
 - name: Provision RabbitMQ namespace for app environment
   include_tasks: ../shared-services/provision-rabbitmq-namespace.yml
-  loop: "{{ shared_dependency_app.environments | default({}) | dict2items }}"
+  loop: >-
+    {{
+      [shared_dependency_app_env_item]
+      if shared_dependency_app_env_item is defined
+      else (shared_dependency_app.environments | default({}) | dict2items)
+    }}
   loop_control:
-    loop_var: shared_dependency_app_env_item
-    label: "{{ shared_dependency_app.name }}:{{ shared_dependency_app_env_item.key }}"
+    loop_var: shared_dependency_env_loop_item
+    label: "{{ shared_dependency_app.name }}:{{ shared_dependency_env_loop_item.key }}"
   vars:
     shared_service_name: rabbitmq
-    shared_service_env: "{{ shared_dependency_app_env_item.key }}"
+    shared_service_env: "{{ shared_dependency_env_loop_item.key }}"
     rabbitmq_app: "{{ shared_dependency_app }}"
-    rabbitmq_app_env: "{{ shared_dependency_app | combine(shared_dependency_app_env_item.value, recursive=True) }}"
+    rabbitmq_app_env: "{{ shared_dependency_app | combine(shared_dependency_env_loop_item.value, recursive=True) }}"
     rabbitmq_secret_names: >-
       {{
         (app_rabbitmq_subscription.environments | default({}))
-        .get(shared_dependency_app_env_item.key, {})
+        .get(shared_dependency_env_loop_item.key, {})
         .get(
           'secret_names',
-          shared_service_catalog.rabbitmq.environments[shared_dependency_app_env_item.key].secret_names | default({})
+          shared_service_catalog.rabbitmq.environments[shared_dependency_env_loop_item.key].secret_names | default({})
         )
       }}
-  when: (shared_dependency_app | combine(shared_dependency_app_env_item.value, recursive=True)).rabbitmq_namespace is defined
+  when: (shared_dependency_app | combine(shared_dependency_env_loop_item.value, recursive=True)).rabbitmq_namespace is defined
