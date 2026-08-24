@@ -215,7 +215,7 @@ def deployment_env_values(server, app, env_options, env_name, shared_service_cat
                     app_env.get("database_host")
                     or app_env.get("postgres_host")
                     or os.environ.get("APP_DATABASE_HOST")
-                    or "138.197.114.62"
+                    or "10.17.0.5"
                 ),
                 "DATABASE_PORT": str(
                     app_env.get("database_port")
