@@ -6,8 +6,20 @@
         postgres_app_env.database_name
         | default(((postgres_app.repo | default(postgres_app.name) | regex_replace('^.*/', '') | regex_replace('-', '_')) ~ '_' ~ (postgres_deployment_env | default(shared_service_env))), true)
       }}
-    postgres_database_user: "{{ lookup('env', 'APP_DATABASE_USER') | default('root', true) }}"
-    postgres_database_password: "{{ lookup('env', 'APP_DATABASE_PASSWORD') | default(lookup('env', postgres_secret_names.password | default('POSTGRES_PROD_PASSWORD')), true) }}"
+    postgres_database_user: >-
+      {{
+        postgres_app_env.database_user
+        | default(lookup('env', postgres_app_env.database_user_secret_name | default('', true)), true)
+        | default(lookup('env', 'APP_DATABASE_USER'), true)
+        | default('root', true)
+      }}
+    postgres_database_password_secret_name: "{{ postgres_app_env.database_password_secret_name | default('APP_DATABASE_PASSWORD', true) }}"
+    postgres_database_password: >-
+      {{
+        postgres_app_env.database_password
+        | default(lookup('env', postgres_app_env.database_password_secret_name | default('APP_DATABASE_PASSWORD', true)), true)
+        | default(lookup('env', postgres_secret_names.password | default('POSTGRES_PROD_PASSWORD')), true)
+      }}
     postgres_admin_database: "{{ shared_service_env_config.database | default('postgres') }}"
     postgres_shared_project_dir: "{{ shared_service_base_dir }}/{{ shared_service_name }}/{{ shared_service_env }}"
     postgres_shared_project_name: "shared_{{ shared_service_name }}_{{ shared_service_env }}"

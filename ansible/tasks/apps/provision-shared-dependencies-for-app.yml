@@ -40,10 +40,10 @@
     postgres_secret_names: >-
       {{
         (app_postgres_subscription.environments | default({}))
-        .get(shared_dependency_env_loop_item.key, {})
+        .get((shared_dependency_app | combine(shared_dependency_env_loop_item.value, recursive=True)).postgres_service_env | default('prod'), {})
         .get(
           'secret_names',
-          shared_service_catalog.postgres.environments[shared_dependency_env_loop_item.key].secret_names | default({})
+          shared_service_catalog.postgres.environments[(shared_dependency_app | combine(shared_dependency_env_loop_item.value, recursive=True)).postgres_service_env | default('prod')].secret_names | default({})
         )
       }}
   when: (shared_dependency_app | combine(shared_dependency_env_loop_item.value, recursive=True)).postgres_database is defined

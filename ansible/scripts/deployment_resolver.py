@@ -197,11 +197,21 @@ def deployment_env_values(server, app, env_options, env_name, shared_service_cat
 
     if postgres_database:
         database_name = app_database_name(app, app_env, env_name)
-        database_user = os.environ.get("APP_DATABASE_USER") or "root"
-        database_password = os.environ.get("APP_DATABASE_PASSWORD")
+        database_user = (
+            app_env.get("database_user")
+            or os.environ.get(app_env.get("database_user_secret_name", ""))
+            or os.environ.get("APP_DATABASE_USER")
+            or "root"
+        )
+        database_password_secret_name = (
+            app_env.get("database_password_secret_name") or "APP_DATABASE_PASSWORD"
+        )
+        database_password = app_env.get("database_password") or os.environ.get(
+            database_password_secret_name
+        )
         if not database_password:
             fail(
-                "GitHub Secret APP_DATABASE_PASSWORD is required for app database "
+                f"GitHub Secret {database_password_secret_name} is required for app database "
                 f"credentials for {app.get('name')}:{env_name}"
             )
         postgres_subscription = subscribed_environment(server, "postgres", env_name)
