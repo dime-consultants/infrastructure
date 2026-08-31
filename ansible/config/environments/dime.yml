@@ -284,6 +284,184 @@ apps:
         k3s:
           namespace: stage
 
+  - name: account
+    repo: dime-consultants/dime-loans
+    deployment_type: k3s
+    aliases:
+      - dime-loans
+      - loans
+      - account.dimeconsultants.africa
+      - stage-account.dimeconsultants.africa
+    port_env: API_PORT
+    postgres_database: account
+    rabbitmq_namespace: account
+    remove_deploy_artifacts:
+      - /root/tools/account/image.tar
+    compose_pull: missing
+    compose_recreate: auto
+    compose_wait_timeout: 120
+    environments:
+      prod:
+        domain: account.dimeconsultants.africa
+        replicas: 2
+        nginx_managed: false
+        port: 8110
+        container_port: 8110
+        service:
+          type: ClusterIP
+          port: 80
+          targetPort: 8110
+        ingress:
+          enabled: true
+          className: traefik
+          annotations:
+            traefik.ingress.kubernetes.io/router.entrypoints: websecure
+            traefik.ingress.kubernetes.io/router.tls: "true"
+            traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+          tls:
+            enabled: true
+        k3s:
+          namespace: prod
+      stage:
+        domain: stage-account.dimeconsultants.africa
+        replicas: 2
+        nginx_managed: false
+        port: 8111
+        container_port: 8111
+        service:
+          type: ClusterIP
+          port: 80
+          targetPort: 8111
+        ingress:
+          enabled: true
+          className: traefik
+          annotations:
+            traefik.ingress.kubernetes.io/router.entrypoints: websecure
+            traefik.ingress.kubernetes.io/router.tls: "true"
+            traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+          tls:
+            enabled: true
+        k3s:
+          namespace: stage
+
+  - name: payroll
+    repo: dime-consultants/hrpayrollui
+    deployment_type: k3s
+    aliases:
+      - hrpayrollui
+      - payroll.dimeconsultants.africa
+      - stage-payroll.dimeconsultants.africa
+    port_env: API_PORT
+    environments:
+      prod:
+        domain: payroll.dimeconsultants.africa
+        replicas: 2
+        nginx_managed: false
+        port: 3000
+        container_port: 3000
+        service:
+          type: ClusterIP
+          port: 80
+          targetPort: 3000
+        probes:
+          path: /
+        env:
+          HOME: /home/node
+          COREPACK_HOME: /home/node/.cache/node/corepack
+          NODE_ENV: production
+          NEXT_TELEMETRY_DISABLED: "1"
+          PORT: "3000"
+        tmpVolume:
+          enabled: false
+        volumeMounts:
+          - mountPath: /tmp
+            name: tmp
+          - mountPath: /var/tmp
+            name: var-tmp
+          - mountPath: /home/app/.cache
+            name: cache
+          - mountPath: /home/node/.cache
+            name: node-cache
+          - mountPath: /app/.next/cache
+            name: next-cache
+        volumes:
+          - name: tmp
+            emptyDir: {}
+          - name: var-tmp
+            emptyDir: {}
+          - name: cache
+            emptyDir: {}
+          - name: node-cache
+            emptyDir: {}
+          - name: next-cache
+            emptyDir: {}
+        ingress:
+          enabled: true
+          className: traefik
+          annotations:
+            traefik.ingress.kubernetes.io/router.entrypoints: websecure
+            traefik.ingress.kubernetes.io/router.tls: "true"
+            traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+          tls:
+            enabled: true
+        k3s:
+          namespace: prod
+          normalize_deployment_ports: true
+      stage:
+        domain: stage-payroll.dimeconsultants.africa
+        replicas: 2
+        nginx_managed: false
+        port: 3000
+        container_port: 3000
+        service:
+          type: ClusterIP
+          port: 80
+          targetPort: 3000
+        probes:
+          path: /
+        env:
+          HOME: /home/node
+          COREPACK_HOME: /home/node/.cache/node/corepack
+          NODE_ENV: production
+          NEXT_TELEMETRY_DISABLED: "1"
+          PORT: "3000"
+        tmpVolume:
+          enabled: false
+        volumeMounts:
+          - mountPath: /tmp
+            name: tmp
+          - mountPath: /var/tmp
+            name: var-tmp
+          - mountPath: /home/app/.cache
+            name: cache
+          - mountPath: /home/node/.cache
+            name: node-cache
+          - mountPath: /app/.next/cache
+            name: next-cache
+        volumes:
+          - name: tmp
+            emptyDir: {}
+          - name: var-tmp
+            emptyDir: {}
+          - name: cache
+            emptyDir: {}
+          - name: node-cache
+            emptyDir: {}
+          - name: next-cache
+            emptyDir: {}
+        ingress:
+          enabled: true
+          className: traefik
+          annotations:
+            traefik.ingress.kubernetes.io/router.entrypoints: websecure
+            traefik.ingress.kubernetes.io/router.tls: "true"
+            traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+          tls:
+            enabled: true
+        k3s:
+          namespace: stage
+          normalize_deployment_ports: true
+
   - name: guardian
     repo: dime-consultants/Guardian-Bank-UI
     deployment_type: k3s

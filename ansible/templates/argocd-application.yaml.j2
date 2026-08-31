@@ -1,0 +1,27 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ k3s_argocd_application_name | to_json }}
+  namespace: {{ k3s_argocd_namespace | to_json }}
+  labels:
+    app.kubernetes.io/name: {{ deployment_app.name | to_json }}
+    app.kubernetes.io/instance: {{ k3s_app_release_name | to_json }}
+    app.kubernetes.io/part-of: dime-apps
+    dimeconsultants.africa/app: {{ deployment_app.name | to_json }}
+    dimeconsultants.africa/environment: {{ env | to_json }}
+spec:
+  project: {{ k3s_gitops_project | default('default') | to_json }}
+  source:
+    repoURL: {{ k3s_gitops_repo_url | to_json }}
+    targetRevision: {{ k3s_gitops_revision | to_json }}
+    path: {{ k3s_gitops_app_path | to_json }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ k3s_namespace | to_json }}
+  syncPolicy:
+    automated:
+      prune: {{ k3s_gitops_sync_prune | ternary('true', 'false') }}
+      selfHeal: {{ k3s_gitops_self_heal | ternary('true', 'false') }}
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
