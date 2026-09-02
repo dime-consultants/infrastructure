@@ -34,14 +34,24 @@ metadata:
 data:
   datasources.yaml: |
     apiVersion: 1
+    deleteDatasources:
+      - name: loki
+        orgId: 1
+      - name: Loki
+        orgId: 1
+    prune: true
     datasources:
 {% if loki_enabled %}
       - name: Loki
+        uid: loki
         type: loki
         access: proxy
         url: http://loki.{{ namespace }}.svc.cluster.local:3100
         isDefault: true
         editable: false
+        jsonData:
+          timeout: 60
+          maxLines: 1000
 {% endif %}
 {% if loki_enabled %}
 ---
