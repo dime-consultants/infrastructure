@@ -6,7 +6,8 @@
 {% set loki_enabled = loki.enabled | default(true) | bool %}
 {% set promtail = grafana.promtail | default({}) %}
 {% set promtail_enabled = promtail.enabled | default(loki_enabled) | bool %}
-{% set promtail_namespaces = promtail.namespaces | default(kubernetes_namespaces | default(['prod', 'stage'])) %}
+{% set promtail_namespaces = promtail.namespaces | default((kubernetes_namespaces | default(['prod', 'stage'])) + [namespace]) %}
+{% set promtail_positions_dir = promtail.positions_dir | default('/var/lib/promtail') %}
 {% set cert_manager_config = k3s.cert_manager | default({}) %}
 {% set cert_manager_issuer = cert_manager_config.cluster_issuer | default({}) %}
 {% set cert_manager_enabled = cert_manager_config.enabled | default(false) | bool and cert_manager_issuer.enabled | default(true) | bool %}
@@ -109,28 +110,39 @@ data:
 
     scrape_configs:
       - job_name: kubernetes-pods
-        static_configs:
-{% for log_namespace in promtail_namespaces %}
-          - targets:
-              - localhost
-            labels:
-              job: kubernetes-pods
-              __path__: /var/log/pods/{{ log_namespace }}_*/*/*.log
-{% endfor %}
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - source_labels:
+              - __meta_kubernetes_namespace
+            action: keep
+            regex: {{ promtail_namespaces | unique | join('|') | to_json }}
+          - source_labels:
+              - __meta_kubernetes_namespace
+            target_label: namespace
+          - source_labels:
+              - __meta_kubernetes_pod_name
+            target_label: pod
+          - source_labels:
+              - __meta_kubernetes_pod_container_name
+            target_label: container
+          - source_labels:
+              - __meta_kubernetes_pod_label_dimeconsultants_africa_app
+            target_label: app
+          - source_labels:
+              - __meta_kubernetes_pod_label_dimeconsultants_africa_environment
+            target_label: environment
+          - source_labels:
+              - __meta_kubernetes_pod_label_app_kubernetes_io_component
+            target_label: component
+          - source_labels:
+              - __meta_kubernetes_pod_uid
+              - __meta_kubernetes_pod_container_name
+            separator: /
+            target_label: __path__
+            replacement: /var/log/pods/*$1/*.log
         pipeline_stages:
           - cri: {}
-          - regex:
-              source: filename
-              expression: /var/log/pods/(?P<namespace>[^_]+)_(?P<pod>[^_]+)_(?P<pod_uid>[^/]+)/(?P<container>[^/]+)/[0-9]+\.log
-          - regex:
-              source: pod
-              expression: (?P<app>.*)-(?P<environment>prod|stage)-dime-app-[^-]+-[^-]+
-          - labels:
-              namespace:
-              pod:
-              container:
-              app:
-              environment:
 {% endif %}
 ---
 kind: PersistentVolumeClaim
@@ -403,7 +415,9 @@ spec:
           configMap:
             name: promtail-config
         - name: run
-          emptyDir: {}
+          hostPath:
+            path: {{ promtail_positions_dir }}
+            type: DirectoryOrCreate
         - name: pods
           hostPath:
             path: /var/log/pods

@@ -102,6 +102,7 @@ metadata:
   namespace: {{ k3s_namespace }}
   labels:
 {{ app_labels | to_nice_yaml(indent=2) | indent(4, true) }}
+    app.kubernetes.io/component: web
 spec:
   accessModes:
 {{ claim.accessModes | default(['ReadWriteOnce']) | to_nice_yaml(indent=2) | indent(4, true) }}
@@ -135,6 +136,7 @@ spec:
         app.kubernetes.io/instance: {{ redis_service_name }}
         app.kubernetes.io/managed-by: ansible
         app.kubernetes.io/part-of: dime-apps
+        app.kubernetes.io/component: web
         dimeconsultants.africa/app: {{ deployment_app.name }}
         dimeconsultants.africa/environment: {{ env }}
     spec:

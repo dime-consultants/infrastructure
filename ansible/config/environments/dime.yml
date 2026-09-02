@@ -139,6 +139,11 @@ k3s_grafana:
     storage_size: 10Gi
   promtail:
     enabled: true
+    positions_dir: /var/lib/promtail
+    namespaces:
+      - prod
+      - stage
+      - grafana
   admin_user_secret_name: GRAFANA_PROD_USER
   admin_password_secret_name: GRAFANA_PROD_PASSWORD
   ingress:
@@ -364,7 +369,7 @@ apps:
         postgres_service_env: stage
         database_name: dime_loans_stage
         database_user: admin
-        database_password_secret_name: ACCOUNT_STAGE_DATABASE_PASSWORD
+        database_password_secret_name: postgres
         replicas: 2
         nginx_managed: false
         port: 8111

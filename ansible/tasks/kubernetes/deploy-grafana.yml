@@ -18,6 +18,40 @@
       {{ k3s_grafana.admin_user_secret_name | default('GRAFANA_PROD_USER') }} and
       {{ k3s_grafana.admin_password_secret_name | default('GRAFANA_PROD_PASSWORD') }}.
 
+- name: Prepare host log directories for Promtail
+  file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - path: "{{ (k3s_grafana.promtail | default({})).positions_dir | default('/var/lib/promtail') }}"
+      mode: "0777"
+    - path: /var/log/pods
+      mode: "0755"
+    - path: /var/log/containers
+      mode: "0755"
+  when:
+    - (k3s_grafana.promtail | default({})).enabled | default((k3s_grafana.loki | default({})).enabled | default(true)) | bool
+
+- name: Ensure existing K3s pod logs are readable by Promtail
+  shell: |
+    set -eu
+    if [ -d /var/log/pods ]; then
+      find /var/log/pods -type d -exec chmod a+rx {} +
+      find /var/log/pods -type f -exec chmod a+r {} +
+    fi
+    if [ -d /var/log/containers ]; then
+      find /var/log/containers -type d -exec chmod a+rx {} +
+      find /var/log/containers -type f -exec chmod a+r {} +
+    fi
+  args:
+    executable: /bin/bash
+  changed_when: false
+  when:
+    - (k3s_grafana.promtail | default({})).enabled | default((k3s_grafana.loki | default({})).enabled | default(true)) | bool
+
 - name: Remove old external Grafana route release
   command: >
     /usr/local/bin/helm uninstall {{ k3s_grafana_external_release }}
