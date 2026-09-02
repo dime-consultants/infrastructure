@@ -343,7 +343,7 @@ apps:
         postgres_database: account
         database_name: dime_loans
         database_user: admin
-        database_password_secret_name: "9QeyWXKFzv3QIId"
+        database_password_secret_name: ACCOUNT_PROD_DATABASE_PASSWORD
         replicas: 2
         nginx_managed: false
         port: 8110
@@ -369,7 +369,7 @@ apps:
         postgres_service_env: stage
         database_name: dime_loans_stage
         database_user: admin
-        database_password_secret_name: postgres
+        database_password_secret_name: ACCOUNT_STAGE_DATABASE_PASSWORD
         replicas: 2
         nginx_managed: false
         port: 8111
