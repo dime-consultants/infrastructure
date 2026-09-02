@@ -162,6 +162,27 @@ apps:
     port_env: API_PORT
     postgres_database: invoicing
     rabbitmq_namespace: invoicing
+    redis:
+      enabled: true
+    workers:
+      - name: celery-worker
+        command:
+          - celery
+          - -A
+          - config
+          - worker
+          - -l
+          - INFO
+      - name: celery-beat
+        command:
+          - celery
+          - -A
+          - config
+          - beat
+          - -l
+          - INFO
+          - --schedule
+          - /tmp/celerybeat-schedule
     secret_names:
       SECRET_KEY: DJANGO_SECRET_KEY
     remove_deploy_artifacts:

@@ -40,6 +40,12 @@
 }) %}
 {% set resource_name = k3s_app_resource_name %}
 {% set app_name = 'dime-app' %}
+{% set redis_config = deployment_app_env.redis | default({}) %}
+{% set redis_enabled = redis_config.enabled | default(false) | bool %}
+{% set redis_service_name = redis_config.serviceName | default(resource_name ~ '-redis') %}
+{% set redis_port = redis_config.port | default(6379) %}
+{% set redis_database = redis_config.database | default(0) %}
+{% set redis_url = redis_config.url | default('redis://' ~ redis_service_name ~ ':' ~ redis_port ~ '/' ~ redis_database) %}
 {% set app_labels = {
   'app.kubernetes.io/name': app_name,
   'app.kubernetes.io/instance': k3s_app_release_name,
@@ -54,6 +60,9 @@
   'app.kubernetes.io/instance': k3s_app_release_name
 } %}
 {% set env_config = deployment_app_env.env | default({}) %}
+{% if redis_enabled and env_config.REDIS_URL is not defined %}
+{% set _ = env_config.update({'REDIS_URL': redis_url}) %}
+{% endif %}
 {% set secret_env_config = deployment_app_env.secret_env | default({}) | combine(k3s_dynamic_secret_env | default({}), recursive=True) %}
 {% if env_config %}
 apiVersion: v1
@@ -82,6 +91,96 @@ stringData:
 {% for key, value in secret_env_config | dictsort %}
   {{ key }}: {{ value | to_json }}
 {% endfor %}
+---
+{% endif %}
+{% if redis_enabled %}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ redis_service_name }}
+  namespace: {{ k3s_namespace }}
+  labels:
+{{ app_labels | to_nice_yaml(indent=2) | indent(4, true) }}
+    app.kubernetes.io/component: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+      app.kubernetes.io/instance: {{ redis_service_name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: redis
+        app.kubernetes.io/instance: {{ redis_service_name }}
+        app.kubernetes.io/managed-by: ansible
+        app.kubernetes.io/part-of: dime-apps
+        dimeconsultants.africa/app: {{ deployment_app.name }}
+        dimeconsultants.africa/environment: {{ env }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: redis
+          image: {{ redis_config.image | default('redis:7-alpine') | to_json }}
+          imagePullPolicy: {{ redis_config.pullPolicy | default('IfNotPresent') }}
+          args:
+            - redis-server
+            - --appendonly
+            - {{ redis_config.appendonly | default('no') | string | to_json }}
+          ports:
+            - name: redis
+              containerPort: {{ redis_port }}
+              protocol: TCP
+          readinessProbe:
+            tcpSocket:
+              port: redis
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: redis
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: false
+            runAsNonRoot: true
+          resources:
+{{ redis_config.resources | default({}) | to_nice_yaml(indent=2) | indent(12, true) }}
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+      volumes:
+        - name: redis-data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ redis_service_name }}
+  namespace: {{ k3s_namespace }}
+  labels:
+{{ app_labels | to_nice_yaml(indent=2) | indent(4, true) }}
+    app.kubernetes.io/component: redis
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ redis_port }}
+      targetPort: redis
+      protocol: TCP
+      name: redis
+  selector:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/instance: {{ redis_service_name }}
 ---
 {% endif %}
 apiVersion: apps/v1
@@ -214,6 +313,99 @@ spec:
 {{ deployment_app_env.volumes | to_nice_yaml(indent=2) | indent(8, true) }}
 {% endif %}
 {% endif %}
+{% for worker in deployment_app_env.workers | default([]) %}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ worker.resource_name | default(resource_name ~ '-' ~ worker.name) | regex_replace('[^A-Za-z0-9-]', '-') }}
+  namespace: {{ k3s_namespace }}
+  labels:
+{{ app_labels | to_nice_yaml(indent=2) | indent(4, true) }}
+    app.kubernetes.io/component: {{ worker.name | regex_replace('[^A-Za-z0-9-]', '-') }}
+spec:
+  replicas: {{ [worker.replicas | default(1) | int, 1] | max }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ app_name }}
+      app.kubernetes.io/instance: {{ worker.resource_name | default(resource_name ~ '-' ~ worker.name) | regex_replace('[^A-Za-z0-9-]', '-') }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ app_name }}
+        app.kubernetes.io/instance: {{ worker.resource_name | default(resource_name ~ '-' ~ worker.name) | regex_replace('[^A-Za-z0-9-]', '-') }}
+        app.kubernetes.io/managed-by: ansible
+        app.kubernetes.io/part-of: dime-apps
+        app.kubernetes.io/component: {{ worker.name | regex_replace('[^A-Za-z0-9-]', '-') }}
+        dimeconsultants.africa/app: {{ deployment_app.name }}
+        dimeconsultants.africa/environment: {{ env }}
+        observability.grafana.com/logs: "enabled"
+    spec:
+      securityContext:
+{{ worker.podSecurityContext | default(deployment_app_env.podSecurityContext | default({
+  'runAsNonRoot': true,
+  'runAsUser': 1000,
+  'runAsGroup': 1000,
+  'fsGroup': 1000,
+  'seccompProfile': {'type': 'RuntimeDefault'}
+})) | to_nice_yaml(indent=2) | indent(8, true) }}
+{% if deployment_app_env.imagePullSecrets | default([]) %}
+      imagePullSecrets:
+{{ deployment_app_env.imagePullSecrets | to_nice_yaml(indent=2) | indent(8, true) }}
+{% endif %}
+      containers:
+        - name: {{ worker.name | regex_replace('[^A-Za-z0-9-]', '-') }}
+          image: "{{ image_config.repository | default((k3s_image_tag | regex_replace(':[^:/]+$', ''))) }}:{{ image_config.tag | default(k3s_image_tag | regex_replace('^.+:', '')) }}"
+          imagePullPolicy: {{ image_config.pullPolicy | default('IfNotPresent') }}
+          securityContext:
+{{ worker.securityContext | default(deployment_app_env.securityContext | default({
+  'allowPrivilegeEscalation': false,
+  'capabilities': {'drop': ['ALL']},
+  'privileged': false,
+  'readOnlyRootFilesystem': true,
+  'runAsNonRoot': true
+})) | to_nice_yaml(indent=2) | indent(12, true) }}
+          command:
+{{ worker.command | to_nice_yaml(indent=2) | indent(12, true) }}
+{% if worker.args | default([]) %}
+          args:
+{{ worker.args | to_nice_yaml(indent=2) | indent(12, true) }}
+{% endif %}
+{% if env_config or secret_env_config %}
+          envFrom:
+{% if env_config %}
+            - configMapRef:
+                name: {{ resource_name }}-env
+{% endif %}
+{% if secret_env_config %}
+            - secretRef:
+                name: {{ resource_name }}-secret
+{% endif %}
+{% endif %}
+          resources:
+{{ worker.resources | default(deployment_app_env.resources | default({})) | to_nice_yaml(indent=2) | indent(12, true) }}
+{% if tmp_volume_config.enabled | default(false) | bool or worker.volumeMounts | default([]) %}
+          volumeMounts:
+{% if tmp_volume_config.enabled | default(false) | bool %}
+{{ tmp_volume_config.mounts | default([]) | to_nice_yaml(indent=2) | indent(12, true) }}
+{% endif %}
+{% if worker.volumeMounts | default([]) %}
+{{ worker.volumeMounts | to_nice_yaml(indent=2) | indent(12, true) }}
+{% endif %}
+{% endif %}
+{% if tmp_volume_config.enabled | default(false) | bool or worker.volumes | default([]) %}
+      volumes:
+{% if tmp_volume_config.enabled | default(false) | bool %}
+{% for mount in tmp_volume_config.mounts | default([]) %}
+        - name: {{ mount.name }}
+          emptyDir: {}
+{% endfor %}
+{% endif %}
+{% if worker.volumes | default([]) %}
+{{ worker.volumes | to_nice_yaml(indent=2) | indent(8, true) }}
+{% endif %}
+{% endif %}
+{% endfor %}
 {% if service_config.enabled | default(true) | bool %}
 ---
 apiVersion: v1
