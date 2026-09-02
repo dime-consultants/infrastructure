@@ -29,6 +29,7 @@
 {% endif %}
 {% set ingress_annotations = default_ingress_annotations | combine(explicit_ingress_annotations) %}
 {% set probes_config = deployment_app_env.probes | default({}) %}
+{% set persistent_volume_claims = deployment_app_env.persistentVolumeClaims | default([]) %}
 {% set tmp_volume_config = deployment_app_env.tmpVolume | default({
   'enabled': true,
   'mounts': [
@@ -93,6 +94,25 @@ stringData:
 {% endfor %}
 ---
 {% endif %}
+{% for claim in persistent_volume_claims %}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ claim.name }}
+  namespace: {{ k3s_namespace }}
+  labels:
+{{ app_labels | to_nice_yaml(indent=2) | indent(4, true) }}
+spec:
+  accessModes:
+{{ claim.accessModes | default(['ReadWriteOnce']) | to_nice_yaml(indent=2) | indent(4, true) }}
+  resources:
+    requests:
+      storage: {{ claim.storage | default('5Gi') }}
+{% if claim.storageClassName is defined %}
+  storageClassName: {{ claim.storageClassName | to_json }}
+{% endif %}
+---
+{% endfor %}
 {% if redis_enabled %}
 apiVersion: apps/v1
 kind: Deployment
@@ -389,17 +409,23 @@ spec:
 {% if tmp_volume_config.enabled | default(false) | bool %}
 {{ tmp_volume_config.mounts | default([]) | to_nice_yaml(indent=2) | indent(12, true) }}
 {% endif %}
+{% if deployment_app_env.volumeMounts | default([]) %}
+{{ deployment_app_env.volumeMounts | to_nice_yaml(indent=2) | indent(12, true) }}
+{% endif %}
 {% if worker.volumeMounts | default([]) %}
 {{ worker.volumeMounts | to_nice_yaml(indent=2) | indent(12, true) }}
 {% endif %}
 {% endif %}
-{% if tmp_volume_config.enabled | default(false) | bool or worker.volumes | default([]) %}
+{% if tmp_volume_config.enabled | default(false) | bool or deployment_app_env.volumes | default([]) or worker.volumes | default([]) %}
       volumes:
 {% if tmp_volume_config.enabled | default(false) | bool %}
 {% for mount in tmp_volume_config.mounts | default([]) %}
         - name: {{ mount.name }}
           emptyDir: {}
 {% endfor %}
+{% endif %}
+{% if deployment_app_env.volumes | default([]) %}
+{{ deployment_app_env.volumes | to_nice_yaml(indent=2) | indent(8, true) }}
 {% endif %}
 {% if worker.volumes | default([]) %}
 {{ worker.volumes | to_nice_yaml(indent=2) | indent(8, true) }}

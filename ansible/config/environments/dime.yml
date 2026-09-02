@@ -164,6 +164,18 @@ apps:
     rabbitmq_namespace: invoicing
     redis:
       enabled: true
+    persistentVolumeClaims:
+      - name: invoicing-media
+        accessModes:
+          - ReadWriteOnce
+        storage: 10Gi
+    volumes:
+      - name: media
+        persistentVolumeClaim:
+          claimName: invoicing-media
+    volumeMounts:
+      - name: media
+        mountPath: /usr/src/app/media
     workers:
       - name: celery-worker
         command:
